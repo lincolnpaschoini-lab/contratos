@@ -24,7 +24,7 @@
               <span class="config-label">URL do Webhook</span>
               <div class="d-flex align-items-center gap-2">
                 <code class="config-value"><%= config.pipedrive.webhookUrl %></code>
-                <button class="btn btn-xs btn-outline-secondary" onclick="copyText('<%= config.pipedrive.webhookUrl %>')" title="Copiar">
+                <button class="btn btn-xs btn-outline-secondary btn-copy" data-copy="<%= config.pipedrive.webhookUrl %>" title="Copiar">
                   <i class="bi bi-clipboard"></i>
                 </button>
               </div>
@@ -141,7 +141,7 @@
               <span class="config-label">URL do Webhook</span>
               <div class="d-flex align-items-center gap-2">
                 <code class="config-value"><%= config.clicksign.webhookUrl %></code>
-                <button class="btn btn-xs btn-outline-secondary" onclick="copyText('<%= config.clicksign.webhookUrl %>')" title="Copiar">
+                <button class="btn btn-xs btn-outline-secondary btn-copy" data-copy="<%= config.clicksign.webhookUrl %>" title="Copiar">
                   <i class="bi bi-clipboard"></i>
                 </button>
               </div>
@@ -401,7 +401,38 @@ function showResult(elementId, data) {
     </div>`;
 }
 
-function copyText(text) {
-  navigator.clipboard.writeText(text).then(() => showToast('URL copiada!', 'success'));
+// Botões de copiar usando data-copy (evita problemas com caracteres especiais no onclick)
+document.querySelectorAll('.btn-copy').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    var text = btn.getAttribute('data-copy');
+    var icon = btn.querySelector('i');
+
+    function onSuccess() {
+      if (icon) { icon.className = 'bi bi-check-lg text-success'; }
+      setTimeout(function() {
+        if (icon) { icon.className = 'bi bi-clipboard'; }
+      }, 2000);
+      showToast('URL copiada!', 'success');
+    }
+
+    // Tenta clipboard API moderna
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(onSuccess).catch(function() { fallbackCopy(text, onSuccess); });
+    } else {
+      fallbackCopy(text, onSuccess);
+    }
+  });
+});
+
+function fallbackCopy(text, cb) {
+  var el = document.createElement('textarea');
+  el.value = text;
+  el.style.position = 'fixed';
+  el.style.opacity = '0';
+  document.body.appendChild(el);
+  el.focus();
+  el.select();
+  try { document.execCommand('copy'); cb(); } catch(e) { showToast('Copie manualmente: ' + text, 'warning'); }
+  document.body.removeChild(el);
 }
 </script>
