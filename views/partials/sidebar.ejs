@@ -1,0 +1,60 @@
+<nav class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <i class="bi bi-file-earmark-text-fill me-2"></i>
+    <span>Contratos</span>
+  </div>
+
+  <ul class="nav flex-column sidebar-nav">
+    <li class="nav-item">
+      <a class="nav-link <%= locals.title && locals.title.includes('Dashboard') ? 'active' : '' %>" href="/dashboard">
+        <i class="bi bi-speedometer2"></i> Dashboard
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link <%= locals.title && locals.title.includes('Contratos') ? 'active' : '' %>" href="/contracts">
+        <i class="bi bi-journal-check"></i> Contratos
+      </a>
+    </li>
+
+    <% if (locals.currentUser && locals.currentUser.role === 'ADMIN') { %>
+    <li class="nav-section">Administração</li>
+    <li class="nav-item">
+      <a class="nav-link <%= locals.title && locals.title.includes('Usuários') ? 'active' : '' %>" href="/users">
+        <i class="bi bi-people"></i> Usuários
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link <%= locals.title && locals.title.includes('SLA') ? 'active' : '' %>" href="/settings/sla">
+        <i class="bi bi-sliders"></i> Config. de SLA
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link <%= locals.title && locals.title.includes('Webhook') ? 'active' : '' %>" href="/settings/webhooks">
+        <i class="bi bi-activity"></i> Webhooks
+      </a>
+    </li>
+    <li class="nav-item">
+      <a class="nav-link <%= locals.title && locals.title.includes('Integrações') ? 'active' : '' %>" href="/settings/integrations">
+        <i class="bi bi-plug"></i> Integrações
+      </a>
+    </li>
+    <% } %>
+  </ul>
+
+  <div class="sidebar-footer">
+    <% if (locals.currentUser) { %>
+    <div class="user-info">
+      <div class="user-avatar"><%= locals.currentUser.name.charAt(0).toUpperCase() %></div>
+      <div class="user-details">
+        <div class="user-name"><%= locals.currentUser.name %></div>
+        <div class="user-role"><%= locals.currentUser.role === 'ADMIN' ? 'Administrador' : 'Operador' %></div>
+      </div>
+    </div>
+    <a href="/auth/logout" class="btn btn-sm btn-outline-light w-100 mt-2">
+      <i class="bi bi-box-arrow-right me-1"></i> Sair
+    </a>
+    <% } %>
+  </div>
+</nav>
+
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>

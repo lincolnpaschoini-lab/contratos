@@ -1,0 +1,211 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  OPERATOR
+}
+
+enum ContractStatus {
+  IN_PROGRESS
+  DELAYED
+  COMPLETED
+  CANCELLED
+}
+
+enum StepStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  DELAYED
+}
+
+enum StepName {
+  PROPOSAL_ACCEPTED
+  CONTRACT_PREPARATION
+  CONTRACT_SIGNING
+  CONTRACT_REGISTRATION
+  CONTRACT_BILLING
+}
+
+model User {
+  id           String   @id @default(uuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         UserRole @default(OPERATOR)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  assignedTrackings ContractTracking[] @relation("TrackingAssignedUser")
+  assignedSteps     ContractStep[]     @relation("StepAssignedUser")
+  stepHistories     StepHistory[]      @relation("HistoryChangedBy")
+
+  @@map("users")
+}
+
+model Customer {
+  id        String  @id @default(uuid())
+  name      String
+  document  String?
+  email     String?
+  phone     String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  pipedriveDeal     PipedriveDeal[]
+  contractTrackings ContractTracking[]
+
+  @@index([name])
+  @@map("customers")
+}
+
+model PipedriveDeal {
+  id             String  @id @default(uuid())
+  externalDealId String  @unique @map("external_deal_id")
+  title          String
+  value          Decimal @default(0) @db.Decimal(15, 2)
+  currency       String  @default("BRL")
+  stageName      String  @map("stage_name")
+  stageId        String? @map("stage_id")
+  customerId     String? @map("customer_id")
+  rawPayload     Json?   @map("raw_payload")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  customer         Customer?        @relation(fields: [customerId], references: [id])
+  contractTracking ContractTracking?
+
+  @@map("pipedrive_deals")
+}
+
+model ContractTracking {
+  id                 String         @id @default(uuid())
+  customerId         String         @map("customer_id")
+  pipedriveDealId    String         @unique @map("pipedrive_deal_id")
+  currentStep        StepName       @default(PROPOSAL_ACCEPTED) @map("current_step")
+  overallStatus      ContractStatus @default(IN_PROGRESS) @map("overall_status")
+  assignedUserId     String?        @map("assigned_user_id")
+  proposalAcceptedAt DateTime       @default(now()) @map("proposal_accepted_at")
+  completedAt        DateTime?      @map("completed_at")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  pipedriveDeal PipedriveDeal @relation(fields: [pipedriveDealId], references: [id])
+  assignedUser  User?         @relation("TrackingAssignedUser", fields: [assignedUserId], references: [id])
+
+  steps         ContractStep[]
+  clicksignDocs ClicksignDocument[]
+
+  @@index([overallStatus])
+  @@index([currentStep])
+  @@index([assignedUserId])
+  @@index([proposalAcceptedAt])
+  @@index([customerId])
+  @@map("contract_trackings")
+}
+
+model ContractStep {
+  id                 String     @id @default(uuid())
+  contractTrackingId String     @map("contract_tracking_id")
+  stepName           StepName   @map("step_name")
+  stepOrder          Int        @map("step_order")
+  status             StepStatus @default(PENDING)
+  startedAt          DateTime?  @map("started_at")
+  dueAt              DateTime?  @map("due_at")
+  completedAt        DateTime?  @map("completed_at")
+  assignedUserId     String?    @map("assigned_user_id")
+  notes              String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  contractTracking ContractTracking @relation(fields: [contractTrackingId], references: [id], onDelete: Cascade)
+  assignedUser     User?            @relation("StepAssignedUser", fields: [assignedUserId], references: [id])
+  histories        StepHistory[]
+
+  @@unique([contractTrackingId, stepName])
+  @@index([status])
+  @@index([dueAt])
+  @@index([contractTrackingId])
+  @@map("contract_steps")
+}
+
+model StepHistory {
+  id              String  @id @default(uuid())
+  contractStepId  String  @map("contract_step_id")
+  fromStatus      String? @map("from_status")
+  toStatus        String  @map("to_status")
+  changedByUserId String? @map("changed_by_user_id")
+  changeReason    String? @map("change_reason")
+  metadata        Json?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  contractStep  ContractStep @relation(fields: [contractStepId], references: [id], onDelete: Cascade)
+  changedByUser User?        @relation("HistoryChangedBy", fields: [changedByUserId], references: [id])
+
+  @@index([contractStepId])
+  @@index([createdAt])
+  @@map("step_histories")
+}
+
+model ClicksignDocument {
+  id                 String    @id @default(uuid())
+  contractTrackingId String    @map("contract_tracking_id")
+  externalDocumentId String?   @unique @map("external_document_id")
+  externalEnvelopeId String?   @map("external_envelope_id")
+  status             String    @default("pending")
+  sentAt             DateTime? @map("sent_at")
+  signedAt           DateTime? @map("signed_at")
+  rawPayload         Json?     @map("raw_payload")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  contractTracking ContractTracking @relation(fields: [contractTrackingId], references: [id], onDelete: Cascade)
+
+  @@index([contractTrackingId])
+  @@map("clicksign_documents")
+}
+
+model WebhookEvent {
+  id              String    @id @default(uuid())
+  source          String
+  externalEventId String?   @map("external_event_id")
+  eventType       String    @map("event_type")
+  payload         Json
+  processed       Boolean   @default(false)
+  processedAt     DateTime? @map("processed_at")
+  errorMessage    String?   @map("error_message")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([source])
+  @@index([processed])
+  @@index([createdAt])
+  @@map("webhook_events")
+}
+
+model SlaRule {
+  id           String   @id @default(uuid())
+  stepName     StepName @unique @map("step_name")
+  businessDays Int      @default(1) @map("business_days")
+  active       Boolean  @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("sla_rules")
+}

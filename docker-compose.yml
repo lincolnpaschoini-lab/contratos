@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: contratos_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: contratos_db
+      POSTGRES_USER: contratos_user
+      POSTGRES_PASSWORD: contratos_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - contratos_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U contratos_user -d contratos_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: contratos_app
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://contratos_user:contratos_pass@postgres:5432/contratos_db
+      NODE_ENV: production
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./logs:/app/logs
+
+volumes:
+  contratos_postgres_data:
+    driver: local

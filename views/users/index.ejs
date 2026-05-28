@@ -1,0 +1,181 @@
+<div class="page-header d-flex align-items-center justify-content-between">
+  <h2 class="page-title">Usuários</h2>
+  <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCreate">
+    <i class="bi bi-plus-lg me-1"></i>Novo Usuário
+  </button>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Nome</th>
+          <th>E-mail</th>
+          <th>Perfil</th>
+          <th>Status</th>
+          <th>Cadastrado em</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% users.forEach(u => { %>
+        <tr>
+          <td><strong><%= u.name %></strong></td>
+          <td><%= u.email %></td>
+          <td>
+            <span class="badge bg-<%= u.role === 'ADMIN' ? 'primary' : 'secondary' %>">
+              <%= u.role === 'ADMIN' ? 'Administrador' : 'Operador' %>
+            </span>
+          </td>
+          <td>
+            <span class="badge bg-<%= u.active ? 'success' : 'danger' %>">
+              <%= u.active ? 'Ativo' : 'Inativo' %>
+            </span>
+          </td>
+          <td class="small text-muted"><%= h.formatDate(u.createdAt) %></td>
+          <td>
+            <div class="d-flex gap-1">
+              <button class="btn btn-sm btn-outline-secondary"
+                      data-bs-toggle="modal" data-bs-target="#modalEdit"
+                      data-id="<%= u.id %>" data-name="<%= u.name %>"
+                      data-email="<%= u.email %>" data-role="<%= u.role %>"
+                      data-active="<%= u.active %>">
+                <i class="bi bi-pencil"></i>
+              </button>
+              <button class="btn btn-sm btn-outline-warning"
+                      data-bs-toggle="modal" data-bs-target="#modalResetPwd"
+                      data-id="<%= u.id %>" data-name="<%= u.name %>">
+                <i class="bi bi-key"></i>
+              </button>
+            </div>
+          </td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Modal Criar Usuário -->
+<div class="modal fade" id="modalCreate" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" action="/users">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i>Novo Usuário</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Nome</label>
+            <input type="text" name="name" class="form-control" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">E-mail</label>
+            <input type="email" name="email" class="form-control" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Senha</label>
+            <input type="password" name="password" class="form-control" minlength="6" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Perfil</label>
+            <select name="role" class="form-select">
+              <option value="OPERATOR">Operador</option>
+              <option value="ADMIN">Administrador</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Criar Usuário</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Editar Usuário -->
+<div class="modal fade" id="modalEdit" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" id="formEdit">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-pencil me-2"></i>Editar Usuário</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Nome</label>
+            <input type="text" name="name" id="editName" class="form-control" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">E-mail</label>
+            <input type="email" name="email" id="editEmail" class="form-control" required />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Perfil</label>
+            <select name="role" id="editRole" class="form-select">
+              <option value="OPERATOR">Operador</option>
+              <option value="ADMIN">Administrador</option>
+            </select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Status</label>
+            <select name="active" id="editActive" class="form-select">
+              <option value="true">Ativo</option>
+              <option value="false">Inativo</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Reset Senha -->
+<div class="modal fade" id="modalResetPwd" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" id="formResetPwd">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-key me-2"></i>Redefinir Senha</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p>Redefinindo senha de <strong id="resetPwdName"></strong>.</p>
+          <div class="mb-3">
+            <label class="form-label">Nova Senha</label>
+            <input type="password" name="newPassword" class="form-control" minlength="6" required />
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-warning">Redefinir Senha</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+document.getElementById('modalEdit')?.addEventListener('show.bs.modal', function(e) {
+  const btn = e.relatedTarget;
+  document.getElementById('formEdit').action = '/users/' + btn.dataset.id;
+  document.getElementById('editName').value = btn.dataset.name;
+  document.getElementById('editEmail').value = btn.dataset.email;
+  document.getElementById('editRole').value = btn.dataset.role;
+  document.getElementById('editActive').value = btn.dataset.active;
+});
+
+document.getElementById('modalResetPwd')?.addEventListener('show.bs.modal', function(e) {
+  const btn = e.relatedTarget;
+  document.getElementById('formResetPwd').action = '/users/' + btn.dataset.id + '/reset-password';
+  document.getElementById('resetPwdName').textContent = btn.dataset.name;
+});
+</script>

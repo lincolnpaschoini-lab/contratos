@@ -1,0 +1,9 @@
+<% if (locals.flash && locals.flash.message) { %>
+<% const iconMap = { success: 'check-circle-fill', error: 'x-circle-fill', warning: 'exclamation-triangle-fill', info: 'info-circle-fill' }; %>
+<% const bsMap = { success: 'success', error: 'danger', warning: 'warning', info: 'info' }; %>
+<div class="alert alert-<%= bsMap[locals.flash.type] || 'info' %> alert-dismissible d-flex align-items-center fade show flash-alert" role="alert">
+  <i class="bi bi-<%= iconMap[locals.flash.type] || 'info-circle-fill' %> me-2"></i>
+  <div><%= locals.flash.message %></div>
+  <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+</div>
+<% } %>

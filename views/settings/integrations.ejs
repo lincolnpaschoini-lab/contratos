@@ -1,0 +1,407 @@
+<div class="page-header">
+  <h2 class="page-title">Diagnóstico de Integrações</h2>
+  <p class="text-muted mb-0">Verifique a configuração e teste os webhooks do Pipedrive e Clicksign.</p>
+</div>
+
+<div class="row g-4 mb-4">
+
+  <!-- ── PIPEDRIVE ─────────────────────────────────────────────────── -->
+  <div class="col-12 col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center gap-2">
+        <img src="https://pipedrive-partner-program.s3.amazonaws.com/partner_program/production/assets/logo_small.png"
+             height="18" onerror="this.style.display='none'" />
+        <strong>Pipedrive</strong>
+      </div>
+      <div class="card-body">
+
+        <!-- Status de configuração -->
+        <div class="mb-3">
+          <div class="small fw-semibold text-muted mb-2 text-uppercase" style="letter-spacing:.05em">Configuração</div>
+          <div class="d-flex flex-column gap-2">
+
+            <div class="config-row">
+              <span class="config-label">URL do Webhook</span>
+              <div class="d-flex align-items-center gap-2">
+                <code class="config-value"><%= config.pipedrive.webhookUrl %></code>
+                <button class="btn btn-xs btn-outline-secondary" onclick="copyText('<%= config.pipedrive.webhookUrl %>')" title="Copiar">
+                  <i class="bi bi-clipboard"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="config-row">
+              <span class="config-label">ID do Estágio "Proposta Aceita"</span>
+              <% if (config.pipedrive.stageId) { %>
+              <span class="badge bg-success-subtle text-success border border-success-subtle">
+                <i class="bi bi-check-circle me-1"></i><%= config.pipedrive.stageId %>
+              </span>
+              <% } else { %>
+              <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                <i class="bi bi-x-circle me-1"></i>Não configurado
+              </span>
+              <% } %>
+            </div>
+
+            <div class="config-row">
+              <span class="config-label">API Token</span>
+              <% if (config.pipedrive.hasApiToken) { %>
+              <span class="badge bg-success-subtle text-success border border-success-subtle">
+                <i class="bi bi-check-circle me-1"></i>Configurado
+              </span>
+              <% } else { %>
+              <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+                <i class="bi bi-dash-circle me-1"></i>Não configurado (opcional)
+              </span>
+              <% } %>
+            </div>
+
+            <div class="config-row">
+              <span class="config-label">Webhook Secret</span>
+              <% if (config.pipedrive.hasWebhookSecret) { %>
+              <span class="badge bg-success-subtle text-success border border-success-subtle">
+                <i class="bi bi-shield-check me-1"></i>Configurado
+              </span>
+              <% } else { %>
+              <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+                <i class="bi bi-shield-exclamation me-1"></i>Não configurado (validação desativada)
+              </span>
+              <% } %>
+            </div>
+
+          </div>
+        </div>
+
+        <hr class="my-3" />
+
+        <!-- Teste de webhook -->
+        <div class="mb-3">
+          <div class="small fw-semibold text-muted mb-2 text-uppercase" style="letter-spacing:.05em">
+            Teste — Simular Proposta Aceita
+          </div>
+          <p class="small text-muted mb-1">
+            Executa o fluxo completo internamente — <strong>sem precisar de ngrok ou do Pipedrive</strong>.
+            Cria um contrato de teste real no sistema para validar que tudo está funcionando.
+          </p>
+          <button class="btn btn-primary btn-sm" id="btnTestPipedrive" onclick="testPipedrive()">
+            <i class="bi bi-play-fill me-1"></i>Enviar Webhook de Teste
+          </button>
+        </div>
+
+        <div id="resultPipedrive" class="test-result d-none"></div>
+
+        <!-- Últimos eventos -->
+        <hr class="my-3" />
+        <div class="small fw-semibold text-muted mb-2 text-uppercase" style="letter-spacing:.05em">Últimos 5 Eventos</div>
+        <% if (pipedriveEvents.length === 0) { %>
+        <p class="text-muted small"><i class="bi bi-inbox me-1"></i>Nenhum evento recebido ainda.</p>
+        <% } else { %>
+        <div class="events-mini-list">
+          <% pipedriveEvents.forEach(ev => { %>
+          <div class="events-mini-item">
+            <div class="d-flex align-items-center gap-2">
+              <% if (ev.processed) { %>
+              <i class="bi bi-check-circle-fill text-success"></i>
+              <% } else if (ev.errorMessage) { %>
+              <i class="bi bi-x-circle-fill text-danger"></i>
+              <% } else { %>
+              <i class="bi bi-clock text-secondary"></i>
+              <% } %>
+              <code class="small"><%= ev.eventType %></code>
+              <span class="text-muted small ms-auto"><%= h.formatRelative(ev.createdAt) %></span>
+            </div>
+            <% if (ev.errorMessage) { %>
+            <div class="text-danger small mt-1"><i class="bi bi-bug me-1"></i><%= ev.errorMessage %></div>
+            <% } %>
+          </div>
+          <% }); %>
+        </div>
+        <a href="/settings/webhooks?source=pipedrive" class="btn btn-sm btn-link p-0 mt-2">Ver todos →</a>
+        <% } %>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CLICKSIGN ─────────────────────────────────────────────────── -->
+  <div class="col-12 col-lg-6">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center gap-2">
+        <i class="bi bi-pen-fill text-primary"></i>
+        <strong>Clicksign</strong>
+      </div>
+      <div class="card-body">
+
+        <!-- Status de configuração -->
+        <div class="mb-3">
+          <div class="small fw-semibold text-muted mb-2 text-uppercase" style="letter-spacing:.05em">Configuração</div>
+          <div class="d-flex flex-column gap-2">
+
+            <div class="config-row">
+              <span class="config-label">URL do Webhook</span>
+              <div class="d-flex align-items-center gap-2">
+                <code class="config-value"><%= config.clicksign.webhookUrl %></code>
+                <button class="btn btn-xs btn-outline-secondary" onclick="copyText('<%= config.clicksign.webhookUrl %>')" title="Copiar">
+                  <i class="bi bi-clipboard"></i>
+                </button>
+              </div>
+            </div>
+
+            <div class="config-row">
+              <span class="config-label">Ambiente</span>
+              <span class="badge bg-<%= config.clicksign.apiUrl.includes('sandbox') ? 'warning' : 'success' %>-subtle
+                            text-<%= config.clicksign.apiUrl.includes('sandbox') ? 'warning' : 'success' %>
+                            border border-<%= config.clicksign.apiUrl.includes('sandbox') ? 'warning' : 'success' %>-subtle">
+                <i class="bi bi-<%= config.clicksign.apiUrl.includes('sandbox') ? 'wrench' : 'globe' %> me-1"></i>
+                <%= config.clicksign.apiUrl.includes('sandbox') ? 'Sandbox' : 'Produção' %>
+              </span>
+            </div>
+
+            <div class="config-row">
+              <span class="config-label">API Key</span>
+              <% if (config.clicksign.hasApiKey) { %>
+              <span class="badge bg-success-subtle text-success border border-success-subtle">
+                <i class="bi bi-check-circle me-1"></i>Configurado
+              </span>
+              <% } else { %>
+              <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+                <i class="bi bi-dash-circle me-1"></i>Não configurado (opcional)
+              </span>
+              <% } %>
+            </div>
+
+            <div class="config-row">
+              <span class="config-label">Webhook Token</span>
+              <% if (config.clicksign.hasWebhookToken) { %>
+              <span class="badge bg-success-subtle text-success border border-success-subtle">
+                <i class="bi bi-shield-check me-1"></i>Configurado
+              </span>
+              <% } else { %>
+              <span class="badge bg-warning-subtle text-warning border border-warning-subtle">
+                <i class="bi bi-shield-exclamation me-1"></i>Não configurado (validação desativada)
+              </span>
+              <% } %>
+            </div>
+
+          </div>
+        </div>
+
+        <hr class="my-3" />
+
+        <!-- Teste de webhook -->
+        <div class="mb-3">
+          <div class="small fw-semibold text-muted mb-2 text-uppercase" style="letter-spacing:.05em">
+            Teste — Simular Assinatura Concluída
+          </div>
+          <p class="small text-muted">
+            Simula o evento de assinatura concluída. Informe a chave do documento Clicksign e, opcionalmente, vincule a um contrato existente que esteja na etapa de assinatura.
+          </p>
+
+          <div class="mb-2">
+            <label class="form-label small">Chave do Documento (ex: abc123-key-clicksign)</label>
+            <input type="text" id="csDocumentKey" class="form-control form-control-sm"
+                   placeholder="Informe a chave do documento Clicksign..." />
+          </div>
+
+          <% if (contractsForClicksign.length > 0) { %>
+          <div class="mb-2">
+            <label class="form-label small">Vincular a contrato (etapa de assinatura)</label>
+            <select id="csTrackingId" class="form-select form-select-sm">
+              <option value="">— Não vincular —</option>
+              <% contractsForClicksign.forEach(c => { %>
+              <option value="<%= c.id %>">
+                <%= c.customer.name %>
+                <% if (c.clicksignDocs[0]) { %> [doc: <%= c.clicksignDocs[0].externalDocumentId || 'sem chave' %>]<% } %>
+              </option>
+              <% }); %>
+            </select>
+            <div class="form-text">Se vincular, o sistema associará a chave ao contrato e processará a assinatura.</div>
+          </div>
+          <% } else { %>
+          <div class="alert alert-info py-2 small mb-2">
+            <i class="bi bi-info-circle me-1"></i>
+            Nenhum contrato está na etapa de Assinatura no momento.
+            Para testar, avance um contrato até essa etapa primeiro.
+          </div>
+          <% } %>
+
+          <button class="btn btn-primary btn-sm" id="btnTestClicksign" onclick="testClicksign()">
+            <i class="bi bi-pen me-1"></i>Enviar Webhook de Teste
+          </button>
+        </div>
+
+        <div id="resultClicksign" class="test-result d-none"></div>
+
+        <!-- Últimos eventos -->
+        <hr class="my-3" />
+        <div class="small fw-semibold text-muted mb-2 text-uppercase" style="letter-spacing:.05em">Últimos 5 Eventos</div>
+        <% if (clicksignEvents.length === 0) { %>
+        <p class="text-muted small"><i class="bi bi-inbox me-1"></i>Nenhum evento recebido ainda.</p>
+        <% } else { %>
+        <div class="events-mini-list">
+          <% clicksignEvents.forEach(ev => { %>
+          <div class="events-mini-item">
+            <div class="d-flex align-items-center gap-2">
+              <% if (ev.processed) { %>
+              <i class="bi bi-check-circle-fill text-success"></i>
+              <% } else if (ev.errorMessage) { %>
+              <i class="bi bi-x-circle-fill text-danger"></i>
+              <% } else { %>
+              <i class="bi bi-clock text-secondary"></i>
+              <% } %>
+              <code class="small"><%= ev.eventType %></code>
+              <span class="text-muted small ms-auto"><%= h.formatRelative(ev.createdAt) %></span>
+            </div>
+            <% if (ev.errorMessage) { %>
+            <div class="text-danger small mt-1"><i class="bi bi-bug me-1"></i><%= ev.errorMessage %></div>
+            <% } %>
+          </div>
+          <% }); %>
+        </div>
+        <a href="/settings/webhooks?source=clicksign" class="btn btn-sm btn-link p-0 mt-2">Ver todos →</a>
+        <% } %>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Instruções de configuração -->
+<div class="card">
+  <div class="card-header"><i class="bi bi-book me-2"></i>Como configurar os webhooks</div>
+  <div class="card-body">
+    <div class="row g-4">
+      <div class="col-12 col-md-6">
+        <h6 class="fw-semibold"><i class="bi bi-1-circle me-2 text-primary"></i>Pipedrive</h6>
+        <ol class="small ps-3">
+          <li>Acesse <strong>Configurações → Webhooks</strong> no Pipedrive</li>
+          <li>Clique em <em>+ Adicionar webhook</em></li>
+          <li>Cole a URL: <code><%= config.pipedrive.webhookUrl %></code></li>
+          <li>Evento: <strong>updated.deal</strong></li>
+          <li>Salve e mova um negócio para <em>"Proposta aceita"</em> para testar</li>
+          <li>Configure <code>PIPEDRIVE_PROPOSAL_ACCEPTED_STAGE_ID</code> no <code>.env</code> com o ID correto do estágio</li>
+        </ol>
+        <div class="alert alert-warning py-2 small">
+          <i class="bi bi-lightbulb me-1"></i>
+          Para descobrir o ID do estágio: na URL do Pipedrive ao selecionar o estágio, o parâmetro <code>stage_id</code> aparece na requisição. Ou use a API: <code>GET /stages</code>.
+        </div>
+        <div class="alert alert-secondary py-2 small">
+          <strong><i class="bi bi-exclamation-triangle me-1"></i>Localhost não é aceito pelo Pipedrive.</strong>
+          Para testar localmente sem publicar o sistema, use o <strong>ngrok</strong>:
+          <pre class="mb-1 mt-2 p-2 bg-dark text-light rounded" style="font-size:.75rem">npm install -g ngrok
+ngrok http 3000</pre>
+          Use a URL <code>https://xxxx.ngrok-free.app/integrations/pipedrive/webhook</code> no Pipedrive.<br/>
+          <span class="text-muted">O botão "Enviar Webhook de Teste" acima dispensa o ngrok para testes internos.</span>
+        </div>
+      </div>
+      <div class="col-12 col-md-6">
+        <h6 class="fw-semibold"><i class="bi bi-2-circle me-2 text-primary"></i>Clicksign</h6>
+        <ol class="small ps-3">
+          <li>Acesse <strong>Configurações → Notificações</strong> na Clicksign</li>
+          <li>Adicione a URL: <code><%= config.clicksign.webhookUrl %></code></li>
+          <li>Configure o token de acesso em <code>CLICKSIGN_WEBHOOK_TOKEN</code> no <code>.env</code></li>
+          <li>Ao criar um documento para assinatura, registre a <em>chave do documento</em> na tabela <code>clicksign_documents</code> vinculada ao contrato</li>
+          <li>Quando todos assinarem, o webhook atualizará automaticamente a etapa</li>
+        </ol>
+        <div class="alert alert-info py-2 small">
+          <i class="bi bi-info-circle me-1"></i>
+          O campo <code>CLICKSIGN_API_URL</code> deve ser <code>https://app.clicksign.com</code> em produção.
+          Use <code>https://sandbox.clicksign.com</code> apenas para testes.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function testPipedrive() {
+  const btn = document.getElementById('btnTestPipedrive');
+  const result = document.getElementById('resultPipedrive');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando...';
+  result.className = 'test-result d-none';
+
+  try {
+    const res = await fetch('/settings/integrations/test/pipedrive', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      credentials: 'same-origin',
+    });
+    const data = await res.json();
+    showResult('resultPipedrive', data);
+  } catch (e) {
+    showResult('resultPipedrive', { success: false, message: 'Erro de conexão: ' + e.message });
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-play-fill me-1"></i>Enviar Webhook de Teste';
+  }
+}
+
+async function testClicksign() {
+  const btn = document.getElementById('btnTestClicksign');
+  const result = document.getElementById('resultClicksign');
+  const documentKey = document.getElementById('csDocumentKey')?.value?.trim();
+  const trackingId = document.getElementById('csTrackingId')?.value || undefined;
+
+  if (!documentKey) {
+    showResult('resultClicksign', { success: false, message: 'Informe a chave do documento antes de testar.' });
+    return;
+  }
+
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Enviando...';
+  result.className = 'test-result d-none';
+
+  try {
+    const res = await fetch('/settings/integrations/test/clicksign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ documentKey, trackingId }),
+    });
+    const data = await res.json();
+    showResult('resultClicksign', data);
+  } catch (e) {
+    showResult('resultClicksign', { success: false, message: 'Erro de conexão: ' + e.message });
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-pen me-1"></i>Enviar Webhook de Teste';
+  }
+}
+
+function showResult(elementId, data) {
+  const el = document.getElementById(elementId);
+  const isOk = data.success && !data.data?.skipped;
+  const isSkipped = data.success && data.data?.skipped;
+  const typeClass = isOk ? 'success' : isSkipped ? 'warning' : 'danger';
+  const icon = isOk ? 'check-circle-fill' : isSkipped ? 'exclamation-triangle-fill' : 'x-circle-fill';
+
+  let extra = '';
+  if (data.data) {
+    if (data.data.created && data.data.externalDealId) {
+      extra = `<div class="mt-2 small"><strong>Deal ID:</strong> ${data.data.externalDealId}</div>`;
+    }
+    if (data.data.trackingId) {
+      extra += `<div class="small"><strong>Contrato:</strong> <a href="/contracts/${data.data.trackingId}" target="_blank">${data.data.trackingId}</a></div>`;
+    }
+    if (data.data.reason) {
+      extra += `<div class="small text-muted"><strong>Motivo:</strong> ${data.data.reason}</div>`;
+    }
+  }
+
+  el.className = `test-result alert alert-${typeClass} py-2`;
+  el.innerHTML = `
+    <div class="d-flex align-items-start gap-2">
+      <i class="bi bi-${icon} mt-1"></i>
+      <div>
+        <div class="small fw-semibold">${data.message}</div>
+        ${extra}
+      </div>
+    </div>`;
+}
+
+function copyText(text) {
+  navigator.clipboard.writeText(text).then(() => showToast('URL copiada!', 'success'));
+}
+</script>

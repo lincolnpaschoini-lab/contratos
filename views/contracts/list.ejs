@@ -1,0 +1,162 @@
+<div class="page-header d-flex align-items-center justify-content-between">
+  <div>
+    <h2 class="page-title">Contratos</h2>
+    <span class="text-muted small">Total: <%= total %> registro(s)</span>
+  </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-3">
+  <div class="card-body py-3">
+    <form method="GET" action="/contracts" id="filterForm">
+      <div class="row g-2 align-items-end">
+        <div class="col-12 col-md-3">
+          <label class="form-label small">Busca</label>
+          <input type="text" name="search" class="form-control form-control-sm"
+            placeholder="Cliente ou negócio..." value="<%= filters.search || '' %>" />
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label small">Status</label>
+          <select name="status" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            <% Object.entries(h.CONTRACT_STATUS_LABELS).forEach(([k,v]) => { %>
+            <option value="<%= k %>" <%= filters.status === k ? 'selected' : '' %>><%= v %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label small">
+            Etapa
+            <% if (filters.delayedStep) { %>
+            <span class="badge bg-danger ms-1" style="font-size:.65rem">atrasada</span>
+            <% } %>
+          </label>
+          <select name="currentStep" class="form-select form-select-sm">
+            <option value="">Todas (etapa atual)</option>
+            <% h.STEP_NAMES_ORDERED.forEach(s => { %>
+            <option value="<%= s %>" <%= filters.currentStep === s ? 'selected' : '' %>><%= h.STEP_LABELS[s] %></option>
+            <% }); %>
+          </select>
+          <%# Campo oculto preserva o filtro delayedStep quando vem do dashboard %>
+          <% if (filters.delayedStep && !filters.currentStep) { %>
+          <input type="hidden" name="delayedStep" value="<%= filters.delayedStep %>" />
+          <% } %>
+        </div>
+        <div class="col-6 col-md-2">
+          <label class="form-label small">Responsável</label>
+          <select name="assignedUserId" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            <% users.forEach(u => { %>
+            <option value="<%= u.id %>" <%= filters.assignedUserId === u.id ? 'selected' : '' %>><%= u.name %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="col-6 col-md-1">
+          <button type="submit" class="btn btn-primary btn-sm w-100">
+            <i class="bi bi-search"></i>
+          </button>
+        </div>
+        <div class="col-6 col-md-1">
+          <a href="/contracts" class="btn btn-outline-secondary btn-sm w-100">Limpar</a>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Tabela -->
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Cliente</th>
+          <th>Negócio / Valor</th>
+          <th>Etapa Atual</th>
+          <th>Status Geral</th>
+          <th>Progresso</th>
+          <th>Responsável</th>
+          <th>Prazo Atual</th>
+          <th>Aceite</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% data.forEach(c => { %>
+        <%
+          const currentStepObj = c.steps.find(s => s.stepName === c.currentStep);
+          const isOverdue = currentStepObj?.dueAt && new Date(currentStepObj.dueAt) < new Date() && currentStepObj.status !== 'COMPLETED';
+          const completedCount = c.steps.filter(s => s.status === 'COMPLETED').length;
+          const progressPct = Math.round((completedCount / 5) * 100);
+        %>
+        <tr class="<%= c.overallStatus === 'DELAYED' ? 'table-danger-subtle' : '' %>">
+          <td>
+            <div class="fw-semibold"><%= c.customer.name %></div>
+            <div class="text-muted small"><%= c.customer.document || '' %></div>
+          </td>
+          <td>
+            <div class="small"><%= c.pipedriveDeal.title %></div>
+            <div class="fw-semibold text-primary small"><%= h.formatCurrency(c.pipedriveDeal.value) %></div>
+          </td>
+          <td>
+            <span class="step-badge step-badge-<%= h.STEP_STATUS_CSS[currentStepObj?.status || 'PENDING'] %>">
+              <%= h.STEP_LABELS[c.currentStep] %>
+            </span>
+          </td>
+          <td>
+            <span class="badge bg-<%= h.CONTRACT_STATUS_CSS[c.overallStatus] %>">
+              <% if (c.overallStatus === 'DELAYED') { %><i class="bi bi-exclamation-triangle me-1"></i><% } %>
+              <%= h.CONTRACT_STATUS_LABELS[c.overallStatus] %>
+            </span>
+          </td>
+          <td style="min-width:120px">
+            <div class="d-flex align-items-center gap-2">
+              <div class="progress flex-grow-1" style="height:6px">
+                <div class="progress-bar bg-<%= progressPct === 100 ? 'success' : 'primary' %>"
+                     style="width:<%= progressPct %>%"></div>
+              </div>
+              <span class="small text-muted"><%= completedCount %>/5</span>
+            </div>
+          </td>
+          <td class="small"><%= c.assignedUser?.name || '—' %></td>
+          <td class="small">
+            <% if (currentStepObj?.dueAt) { %>
+            <span class="<%= isOverdue ? 'text-danger fw-semibold' : '' %>">
+              <% if (isOverdue) { %><i class="bi bi-exclamation-circle me-1"></i><% } %>
+              <%= h.formatDate(currentStepObj.dueAt) %>
+            </span>
+            <% } else { %>—<% } %>
+          </td>
+          <td class="small text-muted"><%= h.formatDate(c.proposalAcceptedAt) %></td>
+          <td>
+            <a href="/contracts/<%= c.id %>" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-eye"></i>
+            </a>
+          </td>
+        </tr>
+        <% }); %>
+        <% if (data.length === 0) { %>
+        <tr><td colspan="9" class="text-center text-muted py-5">
+          <i class="bi bi-inbox fs-3 d-block mb-2"></i>Nenhum contrato encontrado.
+        </td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Paginação -->
+  <% if (totalPages > 1) { %>
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <span class="small text-muted">Página <%= page %> de <%= totalPages %></span>
+    <nav>
+      <ul class="pagination pagination-sm mb-0">
+        <% for (let p = 1; p <= totalPages; p++) { %>
+        <li class="page-item <%= p === page ? 'active' : '' %>">
+          <a class="page-link" href="?<%= new URLSearchParams({...filters, page: p}).toString() %>"><%= p %></a>
+        </li>
+        <% } %>
+      </ul>
+    </nav>
+  </div>
+  <% } %>
+</div>

@@ -1,0 +1,18 @@
+<header class="top-header">
+  <button class="btn btn-sm btn-link sidebar-toggle" onclick="toggleSidebar()">
+    <i class="bi bi-list fs-5"></i>
+  </button>
+  <nav aria-label="breadcrumb" class="ms-2">
+    <ol class="breadcrumb mb-0">
+      <li class="breadcrumb-item"><a href="/dashboard">Início</a></li>
+      <% if (typeof title !== 'undefined') { %>
+      <li class="breadcrumb-item active"><%= title %></li>
+      <% } %>
+    </ol>
+  </nav>
+  <div class="ms-auto d-flex align-items-center gap-2">
+    <span class="badge bg-light text-dark border">
+      <i class="bi bi-circle-fill text-success me-1" style="font-size:8px"></i>Sistema online
+    </span>
+  </div>
+</header>

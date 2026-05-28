@@ -1,0 +1,281 @@
+<%
+const stepIconMap = {
+  PROPOSAL_ACCEPTED: 'bi-handshake',
+  CONTRACT_PREPARATION: 'bi-pencil-square',
+  CONTRACT_SIGNING: 'bi-pen',
+  CONTRACT_REGISTRATION: 'bi-folder-check',
+  CONTRACT_BILLING: 'bi-receipt',
+};
+const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepOrder);
+%>
+
+<!-- Cabeçalho -->
+<div class="page-header mb-0">
+  <div class="d-flex align-items-start justify-content-between flex-wrap gap-2">
+    <div>
+      <a href="/contracts" class="btn btn-sm btn-outline-secondary mb-2">
+        <i class="bi bi-arrow-left me-1"></i>Voltar
+      </a>
+      <h2 class="page-title mb-1"><%= contract.customer.name %></h2>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <span class="text-muted small"><%= contract.pipedriveDeal.title %></span>
+        <span class="badge bg-<%= h.CONTRACT_STATUS_CSS[contract.overallStatus] %> fs-6">
+          <%= h.CONTRACT_STATUS_LABELS[contract.overallStatus] %>
+        </span>
+        <span class="badge bg-light text-dark border">
+          <i class="bi bi-currency-dollar me-1"></i><%= h.formatCurrency(contract.pipedriveDeal.value) %>
+        </span>
+      </div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+      <!-- Atribuir responsável -->
+      <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalAssign">
+        <i class="bi bi-person-gear me-1"></i>Atribuir
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Info cards -->
+<div class="row g-3 mb-4 mt-2">
+  <div class="col-6 col-lg-3">
+    <div class="info-card">
+      <div class="info-label">Responsável</div>
+      <div class="info-value"><%= contract.assignedUser?.name || '—' %></div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="info-card">
+      <div class="info-label">Proposta Aceita em</div>
+      <div class="info-value"><%= h.formatDate(contract.proposalAcceptedAt) %></div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="info-card">
+      <div class="info-label">Origem (Pipedrive)</div>
+      <div class="info-value small"><%= contract.pipedriveDeal.externalDealId %></div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="info-card">
+      <div class="info-label"><%= contract.overallStatus === 'COMPLETED' ? 'Concluído em' : 'Etapa Atual' %></div>
+      <div class="info-value">
+        <% if (contract.overallStatus === 'COMPLETED') { %>
+          <%= h.formatDate(contract.completedAt) %>
+        <% } else { %>
+          <%= h.STEP_LABELS[contract.currentStep] %>
+        <% } %>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Timeline das etapas -->
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-diagram-3 me-2"></i>Linha do Tempo</div>
+  <div class="card-body">
+    <div class="timeline-container">
+      <% stepsOrdered.forEach((step, idx) => {
+        const isLast = idx === stepsOrdered.length - 1;
+        const isOverdue = step.dueAt && new Date(step.dueAt) < new Date() && step.status !== 'COMPLETED';
+        const statusClass = step.status === 'COMPLETED' ? 'success' :
+                            step.status === 'DELAYED' ? 'danger' :
+                            step.status === 'IN_PROGRESS' ? 'warning' : 'secondary';
+        const canStart = step.status === 'PENDING' && (idx === 0 || stepsOrdered[idx-1]?.status === 'COMPLETED');
+        const canComplete = step.status === 'IN_PROGRESS' || step.status === 'DELAYED';
+      %>
+      <div class="timeline-step <%= step.status.toLowerCase() %> <%= isOverdue ? 'overdue' : '' %>">
+        <div class="timeline-connector <% if (step.status === 'COMPLETED') { %>completed<% } %>"></div>
+        <div class="timeline-node bg-<%= statusClass %>">
+          <% if (step.status === 'COMPLETED') { %>
+            <i class="bi bi-check-lg text-white"></i>
+          <% } else if (step.status === 'DELAYED') { %>
+            <i class="bi bi-exclamation text-white"></i>
+          <% } else if (step.status === 'IN_PROGRESS') { %>
+            <i class="bi bi-hourglass-split text-white"></i>
+          <% } else { %>
+            <i class="bi bi-circle text-white"></i>
+          <% } %>
+        </div>
+        <div class="timeline-content">
+          <div class="timeline-title">
+            <i class="bi <%= stepIconMap[step.stepName] %> me-1"></i>
+            <%= h.STEP_LABELS[step.stepName] %>
+            <span class="badge bg-<%= statusClass %> ms-1 small"><%= h.STEP_STATUS_LABELS[step.status] %></span>
+          </div>
+
+          <div class="timeline-meta">
+            <% if (step.startedAt) { %>
+            <span><i class="bi bi-play-circle me-1"></i>Iniciado: <%= h.formatDateTime(step.startedAt) %></span>
+            <% } %>
+            <% if (step.completedAt) { %>
+            <span class="text-success"><i class="bi bi-check-circle me-1"></i>Concluído: <%= h.formatDateTime(step.completedAt) %></span>
+            <% } %>
+            <% if (step.dueAt && step.status !== 'COMPLETED') { %>
+            <span class="<%= isOverdue ? 'text-danger fw-semibold' : '' %>">
+              <i class="bi bi-calendar-event me-1"></i>Prazo: <%= h.formatDate(step.dueAt) %>
+              <% if (isOverdue) { %><span class="badge bg-danger ms-1">ATRASADO</span><% } %>
+            </span>
+            <% } %>
+            <% if (step.assignedUser) { %>
+            <span><i class="bi bi-person me-1"></i><%= step.assignedUser.name %></span>
+            <% } %>
+          </div>
+
+          <!-- Ações -->
+          <% if (step.stepName !== 'PROPOSAL_ACCEPTED') { %>
+          <div class="timeline-actions mt-2 d-flex gap-2 flex-wrap">
+            <% if (canStart) { %>
+            <form method="POST" action="/contracts/<%= contract.id %>/steps/<%= step.id %>/start" class="d-inline">
+              <button type="submit" class="btn btn-sm btn-warning">
+                <i class="bi bi-play-fill me-1"></i>Iniciar Etapa
+              </button>
+            </form>
+            <% } %>
+            <% if (canComplete) { %>
+            <button class="btn btn-sm btn-success" data-bs-toggle="modal"
+                    data-bs-target="#modalComplete" data-step-id="<%= step.id %>"
+                    data-step-name="<%= h.STEP_LABELS[step.stepName] %>">
+              <i class="bi bi-check-lg me-1"></i>Concluir
+            </button>
+            <% } %>
+            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse"
+                    data-bs-target="#stepDetail<%= step.id %>">
+              <i class="bi bi-chat-text me-1"></i>Detalhes
+            </button>
+          </div>
+
+          <!-- Painel expandível com notas e histórico -->
+          <div class="collapse mt-2" id="stepDetail<%= step.id %>">
+            <div class="step-detail-panel">
+              <!-- Observações -->
+              <form method="POST" action="/contracts/<%= contract.id %>/steps/<%= step.id %>/notes" class="mb-3">
+                <label class="form-label small fw-semibold">Observações</label>
+                <textarea name="notes" class="form-control form-control-sm" rows="2"
+                          placeholder="Adicione observações sobre esta etapa..."><%= step.notes || '' %></textarea>
+                <button type="submit" class="btn btn-sm btn-outline-primary mt-1">Salvar Obs.</button>
+              </form>
+
+              <!-- Atribuir responsável à etapa -->
+              <form method="POST" action="/contracts/<%= contract.id %>/steps/<%= step.id %>/assign" class="mb-3 d-flex gap-2">
+                <select name="assignedUserId" class="form-select form-select-sm">
+                  <option value="">— Atribuir responsável —</option>
+                  <% users.forEach(u => { %>
+                  <option value="<%= u.id %>" <%= step.assignedUser?.id === u.id ? 'selected' : '' %>><%= u.name %></option>
+                  <% }); %>
+                </select>
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Salvar</button>
+              </form>
+
+              <!-- Histórico -->
+              <% if (step.histories && step.histories.length > 0) { %>
+              <div class="small fw-semibold mb-1">Histórico</div>
+              <div class="history-list">
+                <% step.histories.forEach(h2 => { %>
+                <div class="history-item">
+                  <div class="d-flex align-items-center gap-2">
+                    <% if (h2.fromStatus) { %>
+                    <span class="badge bg-secondary small"><%= h.STEP_STATUS_LABELS[h2.fromStatus] || h2.fromStatus %></span>
+                    <i class="bi bi-arrow-right text-muted small"></i>
+                    <% } %>
+                    <span class="badge bg-primary small"><%= h.STEP_STATUS_LABELS[h2.toStatus] || h2.toStatus %></span>
+                    <span class="text-muted small ms-auto"><%= h.formatDateTime(h2.createdAt) %></span>
+                  </div>
+                  <% if (h2.changeReason) { %>
+                  <div class="text-muted small mt-1"><i class="bi bi-chat-left-text me-1"></i><%= h2.changeReason %></div>
+                  <% } %>
+                  <% if (h2.changedByUser) { %>
+                  <div class="text-muted small"><i class="bi bi-person me-1"></i><%= h2.changedByUser.name %></div>
+                  <% } %>
+                </div>
+                <% }); %>
+              </div>
+              <% } %>
+            </div>
+          </div>
+          <% } %>
+        </div>
+      </div>
+      <% }); %>
+    </div>
+  </div>
+</div>
+
+<!-- Dados de integração Clicksign -->
+<% if (contract.clicksignDocs && contract.clicksignDocs.length > 0) { %>
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-pen me-2"></i>Documentos Clicksign</div>
+  <div class="card-body">
+    <% contract.clicksignDocs.forEach(doc => { %>
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <span><strong>ID:</strong> <%= doc.externalDocumentId || '—' %></span>
+      <span class="badge bg-<%= doc.status === 'signed' ? 'success' : 'secondary' %>"><%= doc.status %></span>
+      <% if (doc.sentAt) { %><span class="small text-muted">Enviado: <%= h.formatDate(doc.sentAt) %></span><% } %>
+      <% if (doc.signedAt) { %><span class="small text-success">Assinado: <%= h.formatDate(doc.signedAt) %></span><% } %>
+    </div>
+    <% }); %>
+  </div>
+</div>
+<% } %>
+
+<!-- Modal Concluir Etapa -->
+<div class="modal fade" id="modalComplete" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" id="formComplete">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-check-circle me-2"></i>Concluir Etapa</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p>Confirma a conclusão de <strong id="completeStepName"></strong>?</p>
+          <div class="mb-3">
+            <label class="form-label">Observação (opcional)</label>
+            <textarea name="notes" class="form-control" rows="3" placeholder="Adicione uma observação..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-success"><i class="bi bi-check-lg me-1"></i>Confirmar Conclusão</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Modal Atribuir Responsável (contrato) -->
+<div class="modal fade" id="modalAssign" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" action="/contracts/<%= contract.id %>/assign">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-person-gear me-2"></i>Atribuir Responsável</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <select name="assignedUserId" class="form-select">
+            <option value="">— Selecione —</option>
+            <% users.forEach(u => { %>
+            <option value="<%= u.id %>" <%= contract.assignedUser?.id === u.id ? 'selected' : '' %>><%= u.name %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// Configura o modal de conclusão com o ID da etapa
+document.getElementById('modalComplete')?.addEventListener('show.bs.modal', function(e) {
+  const btn = e.relatedTarget;
+  const stepId = btn.dataset.stepId;
+  const stepName = btn.dataset.stepName;
+  document.getElementById('formComplete').action = '/contracts/<%= contract.id %>/steps/' + stepId + '/complete';
+  document.getElementById('completeStepName').textContent = stepName;
+});
+</script>

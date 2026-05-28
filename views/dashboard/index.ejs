@@ -1,0 +1,135 @@
+<div class="page-header">
+  <h2 class="page-title">Dashboard</h2>
+  <span class="text-muted small">Visão gerencial do ciclo de contratos</span>
+</div>
+
+<!-- Métricas principais -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="metric-card border-start border-warning border-4">
+      <div class="metric-icon text-warning"><i class="bi bi-hourglass-split"></i></div>
+      <div class="metric-value"><%= summary.totals.inProgress %></div>
+      <div class="metric-label">Em Andamento</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="metric-card border-start border-danger border-4">
+      <div class="metric-icon text-danger"><i class="bi bi-exclamation-triangle"></i></div>
+      <div class="metric-value text-danger"><%= summary.totals.delayed %></div>
+      <div class="metric-label">Atrasados</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="metric-card border-start border-success border-4">
+      <div class="metric-icon text-success"><i class="bi bi-check-circle"></i></div>
+      <div class="metric-value text-success"><%= summary.totals.completed %></div>
+      <div class="metric-label">Concluídos</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="metric-card border-start border-primary border-4">
+      <div class="metric-icon text-primary"><i class="bi bi-currency-dollar"></i></div>
+      <div class="metric-value" style="font-size:1.05rem"><%= h.formatCurrency(summary.pendingBillingValue) %></div>
+      <div class="metric-label">Pendente de Faturamento</div>
+    </div>
+  </div>
+</div>
+
+<!-- Indicadores secundários -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-md-3">
+    <div class="stat-box text-center p-3 rounded border">
+      <div class="stat-number"><%= summary.totals.total %></div>
+      <div class="stat-label">Total de contratos</div>
+    </div>
+  </div>
+  <div class="col-6 col-md-3">
+    <div class="stat-box text-center p-3 rounded border">
+      <div class="stat-number"><%= summary.avgDaysToComplete > 0 ? summary.avgDaysToComplete + 'd' : '—' %></div>
+      <div class="stat-label">Tempo médio (proposta→faturamento)</div>
+    </div>
+  </div>
+  <div class="col-12 col-md-6">
+    <div class="stat-box p-3 rounded border h-100">
+      <div class="small text-muted fw-semibold mb-2">Etapas com atraso</div>
+      <% const delayedEntries = Object.entries(summary.delayedByStep); %>
+      <% if (delayedEntries.length === 0) { %>
+        <span class="text-success small"><i class="bi bi-check-circle me-1"></i>Nenhuma etapa atrasada</span>
+      <% } else { %>
+        <div class="d-flex flex-wrap gap-2">
+          <% delayedEntries.forEach(([step, count]) => { %>
+          <a href="/contracts?delayedStep=<%= step %>" class="text-decoration-none">
+            <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+              <i class="bi bi-exclamation-triangle me-1"></i><%= h.STEP_LABELS[step] || step %>
+              <span class="fw-bold ms-1"><%= count %></span>
+            </span>
+          </a>
+          <% }); %>
+        </div>
+      <% } %>
+    </div>
+  </div>
+</div>
+
+<!-- Pipeline por Etapa -->
+<div class="card mb-4">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-diagram-3 me-2"></i>Contratos por Etapa</span>
+    <a href="/contracts" class="btn btn-sm btn-outline-primary">Ver todos</a>
+  </div>
+  <div class="card-body p-0">
+    <div class="pipeline-grid">
+      <% h.STEP_NAMES_ORDERED.forEach((stepName, idx) => {
+        const col = summary.pipelineByStep[stepName];
+        const count = col ? col.count : 0;
+        const contracts = col ? col.contracts : [];
+        const hasDelayed = contracts.some(c => c.overallStatus === 'DELAYED');
+      %>
+      <div class="pipeline-col">
+        <div class="pipeline-col-header <%= hasDelayed ? 'has-delayed' : '' %>">
+          <span class="pipeline-step-label"><%= h.STEP_LABELS[stepName] %></span>
+          <span class="pipeline-count badge <%= count > 0 ? (hasDelayed ? 'bg-danger' : 'bg-primary') : 'bg-secondary' %>">
+            <%= count %>
+          </span>
+        </div>
+        <div class="pipeline-col-body">
+          <% if (contracts.length === 0) { %>
+          <div class="pipeline-empty">
+            <i class="bi bi-inbox"></i>
+            <span>Nenhum</span>
+          </div>
+          <% } %>
+          <% contracts.forEach(c => {
+            const isDelayed = c.overallStatus === 'DELAYED';
+            const currentStepObj = c.steps.find(s => s.stepName === stepName);
+            const isOverdue = currentStepObj?.dueAt && new Date(currentStepObj.dueAt) < new Date();
+          %>
+          <a href="/contracts/<%= c.id %>" class="pipeline-card <%= isDelayed ? 'delayed' : '' %>">
+            <div class="pipeline-card-name"><%= c.customer.name %></div>
+            <div class="pipeline-card-deal text-truncate"><%= c.pipedriveDeal.title %></div>
+            <div class="pipeline-card-footer">
+              <span class="pipeline-card-value"><%= h.formatCurrency(c.pipedriveDeal.value) %></span>
+              <% if (isDelayed) { %>
+              <span class="badge bg-danger" style="font-size:.65rem">
+                <i class="bi bi-exclamation-triangle"></i> Atrasado
+              </span>
+              <% } else if (currentStepObj?.dueAt) { %>
+              <span class="pipeline-card-due <%= isOverdue ? 'text-danger' : 'text-muted' %>">
+                <i class="bi bi-calendar2 me-1"></i><%= h.formatDate(currentStepObj.dueAt) %>
+              </span>
+              <% } %>
+            </div>
+            <% if (c.assignedUser) { %>
+            <div class="pipeline-card-user">
+              <span class="pipeline-avatar"><%= c.assignedUser.name.charAt(0).toUpperCase() %></span>
+              <span class="pipeline-card-username"><%= c.assignedUser.name %></span>
+            </div>
+            <% } %>
+          </a>
+          <% }); %>
+        </div>
+      </div>
+      <% }); %>
+    </div>
+  </div>
+</div>

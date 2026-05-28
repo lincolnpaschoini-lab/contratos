@@ -1,0 +1,73 @@
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-2">
+  <div>
+    <h2 class="page-title">Configurações de SLA</h2>
+    <p class="text-muted mb-0">Define o prazo em dias úteis para cada etapa do fluxo contratual.</p>
+  </div>
+  <form method="POST" action="/settings/recalculate">
+    <button type="submit" class="btn btn-sm btn-outline-warning">
+      <i class="bi bi-arrow-clockwise me-1"></i>Reconciliar Status dos Contratos
+    </button>
+  </form>
+</div>
+
+<div class="card">
+  <div class="card-header">
+    <i class="bi bi-sliders me-2"></i>Regras de SLA por Etapa
+  </div>
+  <div class="table-responsive">
+    <table class="table mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Etapa</th>
+          <th>Dias Úteis</th>
+          <th>Ativo</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% rules.forEach(rule => { %>
+        <tr>
+          <td>
+            <strong><%= h.STEP_LABELS[rule.stepName] || rule.stepName %></strong>
+            <% if (rule.stepName === 'PROPOSAL_ACCEPTED') { %>
+            <span class="badge bg-secondary ms-2 small">Automático</span>
+            <% } %>
+          </td>
+          <td>
+            <% if (rule.stepName === 'PROPOSAL_ACCEPTED') { %>
+            <span class="text-muted">—</span>
+            <% } else { %>
+            <form method="POST" action="/settings/sla/<%= rule.id %>" class="d-flex align-items-center gap-2">
+              <input type="number" name="businessDays" value="<%= rule.businessDays %>"
+                     min="0" max="30" class="form-control form-control-sm" style="width:80px" />
+              <select name="active" class="form-select form-select-sm" style="width:110px">
+                <option value="true" <%= rule.active ? 'selected' : '' %>>Ativo</option>
+                <option value="false" <%= !rule.active ? 'selected' : '' %>>Inativo</option>
+              </select>
+              <button type="submit" class="btn btn-sm btn-primary">
+                <i class="bi bi-save me-1"></i>Salvar
+              </button>
+            </form>
+            <% } %>
+          </td>
+          <td>
+            <span class="badge bg-<%= rule.active ? 'success' : 'secondary' %>">
+              <%= rule.active ? 'Ativo' : 'Inativo' %>
+            </span>
+          </td>
+          <td>
+            <span class="badge bg-light text-dark border">
+              Atualizado: <%= h.formatDate(rule.updatedAt) %>
+            </span>
+          </td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="alert alert-info mt-3 small">
+  <i class="bi bi-info-circle me-2"></i>
+  Os SLAs definem quantos dias úteis cada etapa tem para ser concluída. Contratos com etapas que excedem o prazo são marcados automaticamente como <strong>Atrasado</strong>.
+</div>

@@ -1,0 +1,135 @@
+<div class="page-header d-flex align-items-center justify-content-between">
+  <div>
+    <h2 class="page-title">Eventos de Webhook</h2>
+    <span class="text-muted small">Total: <%= total %> evento(s)</span>
+  </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-3">
+  <div class="card-body py-3">
+    <form method="GET" class="d-flex gap-2 flex-wrap align-items-end">
+      <div>
+        <label class="form-label small">Origem</label>
+        <select name="source" class="form-select form-select-sm">
+          <option value="">Todas</option>
+          <option value="pipedrive" <%= filters.source === 'pipedrive' ? 'selected' : '' %>>Pipedrive</option>
+          <option value="clicksign" <%= filters.source === 'clicksign' ? 'selected' : '' %>>Clicksign</option>
+        </select>
+      </div>
+      <div>
+        <label class="form-label small">Status</label>
+        <select name="processed" class="form-select form-select-sm">
+          <option value="">Todos</option>
+          <option value="true" <%= filters.processed === 'true' ? 'selected' : '' %>>Processados</option>
+          <option value="false" <%= filters.processed === 'false' ? 'selected' : '' %>>Pendentes/Erro</option>
+        </select>
+      </div>
+      <div>
+        <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
+        <a href="/settings/webhooks" class="btn btn-outline-secondary btn-sm ms-1">Limpar</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-hover mb-0 small">
+      <thead class="table-light">
+        <tr>
+          <th>Origem</th>
+          <th>Tipo de Evento</th>
+          <th>Status</th>
+          <th>Recebido em</th>
+          <th>Processado em</th>
+          <th>Erro</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <% events.forEach(ev => { %>
+        <tr class="<%= !ev.processed && ev.errorMessage ? 'table-danger-subtle' : '' %>">
+          <td>
+            <span class="badge bg-<%= ev.source === 'pipedrive' ? 'primary' : 'info' %>">
+              <%= ev.source %>
+            </span>
+          </td>
+          <td><code><%= ev.eventType %></code></td>
+          <td>
+            <% if (ev.processed) { %>
+            <span class="badge bg-success">Processado</span>
+            <% } else if (ev.errorMessage) { %>
+            <span class="badge bg-danger">Erro</span>
+            <% } else { %>
+            <span class="badge bg-secondary">Pendente</span>
+            <% } %>
+          </td>
+          <td><%= h.formatDateTime(ev.createdAt) %></td>
+          <td><%= ev.processedAt ? h.formatDateTime(ev.processedAt) : '—' %></td>
+          <td>
+            <% if (ev.errorMessage) { %>
+            <span class="text-danger" title="<%= ev.errorMessage %>">
+              <i class="bi bi-exclamation-triangle me-1"></i><%= ev.errorMessage.substring(0, 50) %>...
+            </span>
+            <% } else { %>—<% } %>
+          </td>
+          <td>
+            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                    data-bs-target="#modalPayload"
+                    data-payload="<%= JSON.stringify(ev.payload).replace(/\"/g, '&quot;') %>">
+              <i class="bi bi-braces"></i>
+            </button>
+          </td>
+        </tr>
+        <% }); %>
+        <% if (events.length === 0) { %>
+        <tr><td colspan="7" class="text-center text-muted py-4">Nenhum evento registrado.</td></tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Paginação -->
+  <% if (totalPages > 1) { %>
+  <div class="card-footer d-flex justify-content-between align-items-center">
+    <span class="small text-muted">Página <%= page %> de <%= totalPages %></span>
+    <nav>
+      <ul class="pagination pagination-sm mb-0">
+        <% for (let p = 1; p <= Math.min(totalPages, 10); p++) { %>
+        <li class="page-item <%= p === page ? 'active' : '' %>">
+          <a class="page-link" href="?page=<%= p %><%= filters.source ? '&source='+filters.source : '' %><%= filters.processed !== undefined ? '&processed='+filters.processed : '' %>"><%= p %></a>
+        </li>
+        <% } %>
+      </ul>
+    </nav>
+  </div>
+  <% } %>
+</div>
+
+<!-- Modal Payload -->
+<div class="modal fade" id="modalPayload" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-braces me-2"></i>Payload do Evento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <pre id="payloadContent" class="bg-dark text-light p-3 rounded" style="max-height:400px;overflow:auto;font-size:12px"></pre>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.getElementById('modalPayload')?.addEventListener('show.bs.modal', function(e) {
+  const btn = e.relatedTarget;
+  try {
+    const payload = JSON.parse(btn.dataset.payload);
+    document.getElementById('payloadContent').textContent = JSON.stringify(payload, null, 2);
+  } catch {
+    document.getElementById('payloadContent').textContent = btn.dataset.payload;
+  }
+});
+</script>
