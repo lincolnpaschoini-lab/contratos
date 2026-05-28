@@ -72,6 +72,19 @@
           </div>
         </div>
 
+        <% if (!config.pipedrive.stageId) { %>
+        <div class="alert alert-danger py-2 small mt-2 mb-0">
+          <i class="bi bi-exclamation-triangle-fill me-1"></i>
+          <strong>Ação necessária:</strong> configure <code>PIPEDRIVE_PROPOSAL_ACCEPTED_STAGE_ID</code>
+          no Easypanel (variáveis de ambiente) com o ID do estágio "Proposta aceita" do seu funil.
+          <br/><span class="text-muted">Sem isso, nenhum contrato será criado mesmo recebendo o webhook.</span>
+          <br/><strong class="mt-1 d-block">Como descobrir:</strong>
+          Mova qualquer deal para "Proposta aceita" no Pipedrive → veja o evento chegando em
+          <a href="/settings/webhooks" class="alert-link">Webhooks</a> →
+          o campo <code>current.stage_id</code> no payload é o ID que você precisa.
+        </div>
+        <% } %>
+
         <hr class="my-3" />
 
         <!-- Teste de webhook -->
@@ -372,33 +385,41 @@ async function testClicksign() {
 
 function showResult(elementId, data) {
   const el = document.getElementById(elementId);
-  const isOk = data.success && !data.data?.skipped;
-  const isSkipped = data.success && data.data?.skipped;
+  if (!el) return;
+
+  const isOk = data.success && !(data.data && data.data.skipped);
+  const isSkipped = data.success && data.data && data.data.skipped;
   const typeClass = isOk ? 'success' : isSkipped ? 'warning' : 'danger';
   const icon = isOk ? 'check-circle-fill' : isSkipped ? 'exclamation-triangle-fill' : 'x-circle-fill';
 
   let extra = '';
   if (data.data) {
-    if (data.data.created && data.data.externalDealId) {
-      extra = `<div class="mt-2 small"><strong>Deal ID:</strong> ${data.data.externalDealId}</div>`;
+    if (data.data.externalDealId) {
+      extra += '<div class="mt-1 small"><strong>Deal ID criado:</strong> ' + data.data.externalDealId + '</div>';
     }
     if (data.data.trackingId) {
-      extra += `<div class="small"><strong>Contrato:</strong> <a href="/contracts/${data.data.trackingId}" target="_blank">${data.data.trackingId}</a></div>`;
+      extra += '<div class="small"><strong>Contrato:</strong> <a href="/contracts/' + data.data.trackingId + '" target="_blank" class="alert-link">' + data.data.trackingId + '</a></div>';
     }
     if (data.data.reason) {
-      extra += `<div class="small text-muted"><strong>Motivo:</strong> ${data.data.reason}</div>`;
+      extra += '<div class="small text-muted mt-1"><strong>Motivo:</strong> ' + data.data.reason + '</div>';
     }
   }
 
-  el.className = `test-result alert alert-${typeClass} py-2`;
-  el.innerHTML = `
-    <div class="d-flex align-items-start gap-2">
-      <i class="bi bi-${icon} mt-1"></i>
-      <div>
-        <div class="small fw-semibold">${data.message}</div>
-        ${extra}
-      </div>
-    </div>`;
+  el.className = 'test-result alert alert-' + typeClass + ' mt-3';
+  el.style.display = 'block';
+  el.innerHTML =
+    '<div class="d-flex align-items-start gap-2">' +
+    '<i class="bi bi-' + icon + ' fs-5 mt-1 flex-shrink-0"></i>' +
+    '<div><div class="fw-semibold">' + data.message + '</div>' + extra + '</div>' +
+    '</div>';
+
+  // Rola suavemente até o resultado para garantir visibilidade
+  el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+
+  // Exibe também como toast para não passar despercebido
+  if (typeof showToast === 'function') {
+    showToast(data.message, isOk ? 'success' : isSkipped ? 'warning' : 'error');
+  }
 }
 
 // Botões de copiar usando data-copy (evita problemas com caracteres especiais no onclick)
