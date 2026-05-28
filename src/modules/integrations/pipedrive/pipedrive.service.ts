@@ -30,44 +30,51 @@ export interface PipedriveWebhookPayload {
   };
 }
 
-export async function processPipedriveWebhook(payload: PipedriveWebhookPayload, rawPayload: object) {
-  const eventId = `pipedrive-${payload.meta?.id ?? Date.now()}-${payload.event}`;
+export async function processPipedriveWebhook(
+  payload: PipedriveWebhookPayload,
+  rawPayload: object,
+  existingEventId?: string | null,
+) {
+  // Usa o evento já salvo pelo controller, ou cria um novo se chamado diretamente (testes)
+  let webhookEventId = existingEventId;
 
-  // Idempotência: verifica se já processamos este evento
-  const existing = await prisma.webhookEvent.findFirst({
-    where: { source: 'pipedrive', externalEventId: eventId, processed: true },
-  });
+  if (!webhookEventId) {
+    const eventId = `pipedrive-${payload.meta?.id ?? Date.now()}-${payload.event ?? 'unknown'}`;
 
-  if (existing) {
-    logger.info(`Webhook Pipedrive duplicado ignorado: ${eventId}`);
-    return { skipped: true, reason: 'duplicado' };
+    const existing = await prisma.webhookEvent.findFirst({
+      where: { source: 'pipedrive', externalEventId: eventId, processed: true },
+    });
+    if (existing) {
+      logger.info(`Webhook Pipedrive duplicado ignorado: ${eventId}`);
+      return { skipped: true, reason: 'duplicado' };
+    }
+
+    const saved = await prisma.webhookEvent.create({
+      data: {
+        source: 'pipedrive',
+        externalEventId: eventId,
+        eventType: payload.event ?? 'unknown',
+        payload: rawPayload as any,
+        processed: false,
+      },
+    });
+    webhookEventId = saved.id;
   }
-
-  // Salva o evento no banco
-  const webhookEvent = await prisma.webhookEvent.create({
-    data: {
-      source: 'pipedrive',
-      externalEventId: eventId,
-      eventType: payload.event,
-      payload: rawPayload as any,
-      processed: false,
-    },
-  });
 
   try {
     const result = await handleDealUpdate(payload);
 
     await prisma.webhookEvent.update({
-      where: { id: webhookEvent.id },
+      where: { id: webhookEventId },
       data: { processed: true, processedAt: new Date() },
     });
 
     return result;
   } catch (error: any) {
     await prisma.webhookEvent.update({
-      where: { id: webhookEvent.id },
+      where: { id: webhookEventId },
       data: { errorMessage: error.message ?? 'Erro desconhecido' },
-    });
+    }).catch(() => {}); // não propaga erro de update
     throw error;
   }
 }
