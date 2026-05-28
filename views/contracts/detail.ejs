@@ -28,10 +28,14 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
       </div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
-      <!-- Atribuir responsável -->
       <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalAssign">
         <i class="bi bi-person-gear me-1"></i>Atribuir
       </button>
+      <% if (locals.currentUser && locals.currentUser.role === 'ADMIN') { %>
+      <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalDelete">
+        <i class="bi bi-trash me-1"></i>Excluir
+      </button>
+      <% } %>
     </div>
   </div>
 </div>
@@ -214,6 +218,34 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
       <% if (doc.signedAt) { %><span class="small text-success">Assinado: <%= h.formatDate(doc.signedAt) %></span><% } %>
     </div>
     <% }); %>
+  </div>
+</div>
+<% } %>
+
+<!-- Modal Excluir Contrato -->
+<% if (locals.currentUser && locals.currentUser.role === 'ADMIN') { %>
+<div class="modal fade" id="modalDelete" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" action="/contracts/<%= contract.id %>/delete">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title"><i class="bi bi-exclamation-triangle me-2"></i>Excluir Contrato</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p>Tem certeza que deseja excluir o contrato de <strong><%= contract.customer.name %></strong>?</p>
+          <div class="alert alert-warning py-2 small">
+            <i class="bi bi-info-circle me-1"></i>
+            Esta ação é <strong>irreversível</strong>. Todas as etapas, histórico e documentos vinculados serão removidos.<br/>
+            O deal poderá ser reimportado pelo webhook do Pipedrive se movido novamente para "Proposta aceita".
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Confirmar Exclusão</button>
+        </div>
+      </div>
+    </form>
   </div>
 </div>
 <% } %>

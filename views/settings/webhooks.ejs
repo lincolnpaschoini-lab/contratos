@@ -1,7 +1,12 @@
-<div class="page-header d-flex align-items-center justify-content-between">
+<div class="page-header d-flex align-items-center justify-content-between flex-wrap gap-2">
   <div>
     <h2 class="page-title">Eventos de Webhook</h2>
     <span class="text-muted small">Total: <%= total %> evento(s)</span>
+  </div>
+  <div class="d-flex gap-2">
+    <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalDeleteAll">
+      <i class="bi bi-trash me-1"></i>Limpar todos
+    </button>
   </div>
 </div>
 
@@ -75,11 +80,19 @@
             <% } else { %>—<% } %>
           </td>
           <td>
-            <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
-                    data-bs-target="#modalPayload"
-                    data-payload="<%= JSON.stringify(ev.payload).replace(/\"/g, '&quot;') %>">
-              <i class="bi bi-braces"></i>
-            </button>
+            <div class="d-flex gap-1">
+              <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
+                      data-bs-target="#modalPayload"
+                      data-payload="<%= JSON.stringify(ev.payload).replace(/\"/g, '&quot;') %>">
+                <i class="bi bi-braces"></i>
+              </button>
+              <form method="POST" action="/webhook-events/<%= ev.id %>/delete" class="d-inline"
+                    onsubmit="return confirm('Excluir este evento?')">
+                <button type="submit" class="btn btn-sm btn-outline-danger" title="Excluir">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </form>
+            </div>
           </td>
         </tr>
         <% }); %>
@@ -105,6 +118,35 @@
     </nav>
   </div>
   <% } %>
+</div>
+
+<!-- Modal Limpar Todos -->
+<div class="modal fade" id="modalDeleteAll" tabindex="-1">
+  <div class="modal-dialog">
+    <form method="POST" action="/webhook-events/delete-all">
+      <div class="modal-content">
+        <div class="modal-header bg-danger text-white">
+          <h5 class="modal-title"><i class="bi bi-trash me-2"></i>Limpar Eventos</h5>
+          <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <p>Excluir eventos de webhook:</p>
+          <div class="mb-3">
+            <select name="source" class="form-select">
+              <option value="">Todos (Pipedrive + Clicksign)</option>
+              <option value="pipedrive">Somente Pipedrive</option>
+              <option value="clicksign">Somente Clicksign</option>
+            </select>
+          </div>
+          <p class="text-muted small mb-0">Esta ação não afeta os contratos já criados.</p>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-danger"><i class="bi bi-trash me-1"></i>Excluir</button>
+        </div>
+      </div>
+    </form>
+  </div>
 </div>
 
 <!-- Modal Payload -->

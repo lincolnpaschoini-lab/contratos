@@ -187,3 +187,34 @@ export async function postAssignTracking(req: Request, res: Response, next: Next
     res.redirect(`/contracts/${req.params.id}`);
   }
 }
+
+export async function deleteContract(req: Request, res: Response, _next: NextFunction) {
+  try {
+    const tracking = await prisma.contractTracking.findUnique({
+      where: { id: req.params.id },
+      include: { pipedriveDeal: true },
+    });
+
+    if (!tracking) {
+      setFlash(res, 'error', 'Contrato não encontrado.');
+      return res.redirect('/contracts');
+    }
+
+    const { customerId } = tracking;
+    const dealDbId = tracking.pipedriveDeal.id;
+    const externalDealId = tracking.pipedriveDeal.externalDealId;
+
+    await prisma.contractTracking.delete({ where: { id: req.params.id } });
+    await prisma.pipedriveDeal.delete({ where: { id: dealDbId } });
+
+    if (customerId.startsWith('ext-')) {
+      await prisma.customer.delete({ where: { id: customerId } }).catch(() => {});
+    }
+
+    setFlash(res, 'success', `Contrato excluído. (Deal: ${externalDealId})`);
+    res.redirect('/contracts');
+  } catch (err: any) {
+    setFlash(res, 'error', err.message ?? 'Erro ao excluir contrato.');
+    res.redirect(`/contracts/${req.params.id}`);
+  }
+}
