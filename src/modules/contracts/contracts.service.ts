@@ -77,9 +77,7 @@ export async function createContractFromDeal(params: {
     },
   });
 
-  // Prepara as etapas
-  const proposalDue = addBusinessDays(now, slaMap.get(StepName.CONTRACT_PREPARATION) ?? 1);
-
+  // Prepara as etapas — Preparação começa PENDING para aparecer em "Proposta Aceita" no pipeline
   const steps = [
     {
       stepName: StepName.PROPOSAL_ACCEPTED,
@@ -92,9 +90,9 @@ export async function createContractFromDeal(params: {
     {
       stepName: StepName.CONTRACT_PREPARATION,
       stepOrder: 2,
-      status: StepStatus.IN_PROGRESS,
-      startedAt: now,
-      dueAt: proposalDue,
+      status: StepStatus.PENDING,
+      startedAt: null,
+      dueAt: null,
       completedAt: null,
     },
     {
@@ -130,27 +128,17 @@ export async function createContractFromDeal(params: {
     steps,
   });
 
-  // Registra histórico da proposta aceita e preparação iniciada
+  // Registra apenas o histórico da proposta aceita — preparação aguarda ação manual
   const proposalStep = tracking.steps.find((s) => s.stepName === StepName.PROPOSAL_ACCEPTED)!;
-  const prepStep = tracking.steps.find((s) => s.stepName === StepName.CONTRACT_PREPARATION)!;
 
-  await prisma.stepHistory.createMany({
-    data: [
-      {
-        contractStepId: proposalStep.id,
-        fromStatus: null,
-        toStatus: StepStatus.COMPLETED,
-        changeReason: 'Proposta aceita via Pipedrive',
-        metadata: { source: 'pipedrive', externalDealId: params.externalDealId },
-      },
-      {
-        contractStepId: prepStep.id,
-        fromStatus: StepStatus.PENDING,
-        toStatus: StepStatus.IN_PROGRESS,
-        changeReason: 'Iniciado automaticamente após proposta aceita',
-        metadata: { source: 'system' },
-      },
-    ],
+  await prisma.stepHistory.create({
+    data: {
+      contractStepId: proposalStep.id,
+      fromStatus: null,
+      toStatus: StepStatus.COMPLETED,
+      changeReason: 'Proposta aceita via Pipedrive',
+      metadata: { source: 'pipedrive', externalDealId: params.externalDealId },
+    },
   });
 
   logger.info(`Contrato criado para deal ${params.externalDealId}: tracking ${tracking.id}`);

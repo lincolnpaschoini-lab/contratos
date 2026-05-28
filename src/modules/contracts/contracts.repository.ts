@@ -117,7 +117,7 @@ export async function createTrackingWithSteps(data: {
       pipedriveDealId: data.pipedriveDealId,
       assignedUserId: data.assignedUserId,
       proposalAcceptedAt: data.proposalAcceptedAt,
-      currentStep: StepName.CONTRACT_PREPARATION,
+      currentStep: StepName.PROPOSAL_ACCEPTED,
       overallStatus: ContractStatus.IN_PROGRESS,
       steps: {
         create: data.steps,
