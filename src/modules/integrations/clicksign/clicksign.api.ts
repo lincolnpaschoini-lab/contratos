@@ -80,13 +80,17 @@ export async function createEnvelope(name: string, message: string): Promise<str
 
 /** Adiciona um documento a partir de um template Clicksign. Retorna o document_id. */
 export async function addDocumentFromTemplate(envelopeId: string, templateKey: string, filename: string): Promise<string> {
+  // filename: sem espaços, apenas letras/números/hífen/underscore/ponto
+  const safeFilename = filename.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9\-_.]/g, '');
+
   const res = await apiCall<{ data: { id: string } }>('POST', `/envelopes/${envelopeId}/documents`, {
     data: {
       type: 'documents',
       attributes: {
-        filename,
+        filename: safeFilename,
         template: {
-          data: { key: templateKey },
+          key: templateKey,
+          data: {},
         },
       },
     },
