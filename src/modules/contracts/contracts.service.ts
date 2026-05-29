@@ -373,7 +373,7 @@ export async function completeStep(
     contractStepId: stepId,
     fromStatus: step.status,
     toStatus: StepStatus.COMPLETED,
-    changedByUserId: userId,
+    changedByUserId: userId !== 'system-pipedrive' ? userId : null,
     changeReason: notes ?? 'Etapa concluída manualmente',
   });
 
