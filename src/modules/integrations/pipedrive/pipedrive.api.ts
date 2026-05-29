@@ -93,6 +93,13 @@ export interface PipedrivePerson {
   [key: string]: unknown;
 }
 
+export interface PipedriveField {
+  id: number;
+  key: string;         // hash ou nome padrão
+  name: string;        // label legível (ex: "CNPJ")
+  field_type: string;
+}
+
 // ─── Funções de busca ─────────────────────────────────────────────────────────
 
 export async function fetchOrganization(orgId: number | string): Promise<PipedriveOrganization | null> {
@@ -105,6 +112,61 @@ export async function fetchPerson(personId: number | string): Promise<PipedriveP
   const data = await apiGet<PipedrivePerson>(`/persons/${personId}`);
   if (data) logger.info(`Pipedrive: pessoa ${personId} recuperada — ${data.name}`);
   return data;
+}
+
+/** Retorna todas as definições de campos de organizações (padrão + customizados). */
+export async function fetchOrganizationFields(): Promise<PipedriveField[]> {
+  const data = await apiGet<PipedriveField[]>('/organizationFields');
+  return data ?? [];
+}
+
+/** Retorna todas as definições de campos de pessoas. */
+export async function fetchPersonFields(): Promise<PipedriveField[]> {
+  const data = await apiGet<PipedriveField[]>('/personFields');
+  return data ?? [];
+}
+
+/**
+ * Monta um objeto { label: value } com todos os campos não-nulos da org,
+ * incluindo os campos customizados com seus nomes legíveis.
+ */
+export function buildLabeledFields(
+  orgData: Record<string, unknown>,
+  fields: PipedriveField[],
+): Record<string, string> {
+  const fieldMap = new Map(fields.map((f) => [f.key, f.name]));
+  const result: Record<string, string> = {};
+
+  for (const [key, value] of Object.entries(orgData)) {
+    if (value === null || value === undefined || value === '') continue;
+    if (typeof value === 'object') continue; // ignora objetos aninhados
+
+    const label = fieldMap.get(key) ?? key;
+    result[label] = String(value);
+  }
+
+  return result;
+}
+
+/**
+ * Detecta automaticamente o valor do CNPJ/CPF nos campos da organização.
+ * Procura por campos com nome contendo "cnpj", "cpf", "documento" ou "tax".
+ */
+export function detectDocument(
+  orgData: Record<string, unknown>,
+  fields: PipedriveField[],
+): string | null {
+  const CNPJ_KEYWORDS = ['cnpj', 'cpf', 'documento', 'tax', 'vat', 'nif', 'fiscal'];
+
+  for (const field of fields) {
+    const nameLower = field.name.toLowerCase();
+    if (CNPJ_KEYWORDS.some((kw) => nameLower.includes(kw))) {
+      const value = orgData[field.key];
+      if (value && typeof value === 'string') return value;
+      if (value && typeof value === 'number') return String(value);
+    }
+  }
+  return null;
 }
 
 // ─── Helpers de extração ──────────────────────────────────────────────────────

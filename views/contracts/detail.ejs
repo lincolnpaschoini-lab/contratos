@@ -94,6 +94,41 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
           </div>
           <% } %>
         </div>
+
+        <%
+          // Mostra campos do Pipedrive que ainda não foram mapeados (apenas admin)
+          const orgRaw = contract.customer.pipedriveOrgRaw;
+          const labeled = orgRaw && orgRaw._labeled ? orgRaw._labeled : null;
+          const hasUnmapped = labeled && Object.keys(labeled).length > 0;
+        %>
+        <% if (locals.currentUser?.role === 'ADMIN' && hasUnmapped) { %>
+        <div class="mt-3">
+          <button class="btn btn-xs btn-outline-secondary" type="button"
+                  data-bs-toggle="collapse" data-bs-target="#collapsePipedriveFields">
+            <i class="bi bi-database me-1"></i>Ver todos os campos do Pipedrive
+          </button>
+          <div class="collapse mt-2" id="collapsePipedriveFields">
+            <div class="p-3 bg-light rounded border small">
+              <div class="fw-semibold mb-2 text-muted">Campos disponíveis na organização Pipedrive:</div>
+              <div class="row g-2">
+                <% Object.entries(labeled).forEach(([label, value]) => { %>
+                <% if (value && value !== 'null' && value !== 'undefined' && String(value).trim() !== '') { %>
+                <div class="col-12 col-md-6 col-lg-4">
+                  <span class="text-muted"><%= label %>:</span>
+                  <span class="fw-semibold ms-1"><%= value %></span>
+                </div>
+                <% } %>
+                <% }); %>
+              </div>
+              <div class="mt-2 text-muted" style="font-size:.75rem">
+                <i class="bi bi-info-circle me-1"></i>
+                Se o CNPJ aparece acima mas não está mapeado automaticamente, me informe o nome exato do campo para configurar o mapeamento.
+              </div>
+            </div>
+          </div>
+        </div>
+        <% } %>
+
       </div>
     </div>
   </div>

@@ -199,22 +199,40 @@ export async function syncContractPipedriveData(trackingId: string) {
     throw new AppError('Nenhum ID de organização ou pessoa do Pipedrive vinculado a este cliente.', 400);
   }
 
-  // Importa dinamicamente para evitar dependência circular
-  const { fetchOrganization, fetchPerson, extractPrimaryEmail, extractPrimaryPhone, extractAddress } =
-    await import('../integrations/pipedrive/pipedrive.api');
+  const {
+    fetchOrganization, fetchPerson, fetchOrganizationFields, fetchPersonFields,
+    extractPrimaryEmail, extractPrimaryPhone, extractAddress,
+    buildLabeledFields, detectDocument,
+  } = await import('../integrations/pipedrive/pipedrive.api');
 
-  const [org, person] = await Promise.all([
+  const [org, person, orgFields, personFields] = await Promise.all([
     orgId ? fetchOrganization(orgId) : Promise.resolve(null),
     personId ? fetchPerson(personId) : Promise.resolve(null),
+    fetchOrganizationFields(),
+    fetchPersonFields(),
   ]);
 
   if (!org && !person) {
-    throw new AppError('Não foi possível buscar dados do Pipedrive. Verifique se PIPEDRIVE_API_TOKEN e PIPEDRIVE_DOMAIN estão configurados.', 503);
+    throw new AppError(
+      'Não foi possível buscar dados do Pipedrive. Verifique se PIPEDRIVE_API_TOKEN e PIPEDRIVE_DOMAIN estão configurados.',
+      503,
+    );
   }
 
   const addrData = org
     ? extractAddress(org)
     : { address: null, city: null, state: null, zipCode: null, country: null };
+
+  // Detecta CNPJ automaticamente nos campos customizados
+  const detectedDocument = org ? detectDocument(org as Record<string, unknown>, orgFields) : null;
+
+  // Monta dicionário com todos os campos legíveis para exibição
+  const orgLabeled = org ? buildLabeledFields(org as Record<string, unknown>, orgFields) : null;
+  const personLabeled = person ? buildLabeledFields(person as Record<string, unknown>, personFields) : null;
+
+  // Enriquece o raw com os campos legíveis para facilitar debug
+  const enrichedOrgRaw = org ? { ...org, _labeled: orgLabeled } : null;
+  const enrichedPersonRaw = person ? { ...person, _labeled: personLabeled } : null;
 
   await prisma.customer.update({
     where: { id: customer.id },
@@ -228,19 +246,27 @@ export async function syncContractPipedriveData(trackingId: string) {
         state: addrData.state ?? undefined,
         zipCode: addrData.zipCode ?? undefined,
         country: addrData.country ?? undefined,
-        pipedriveOrgRaw: org as any,
+        document: detectedDocument ?? undefined,
+        pipedriveOrgRaw: enrichedOrgRaw as any,
       }),
       ...(person && {
         contactName: person.name,
         contactEmail: extractPrimaryEmail((person as any).emails ?? person.email) ?? undefined,
         contactPhone: extractPrimaryPhone((person as any).phones ?? person.phone) ?? undefined,
-        pipedrivePersonRaw: person as any,
+        pipedrivePersonRaw: enrichedPersonRaw as any,
       }),
     },
   });
 
-  logger.info(`Dados Pipedrive sincronizados para contrato ${trackingId} — org: ${org?.name ?? '—'}, pessoa: ${person?.name ?? '—'}`);
-  return { org: org?.name ?? null, person: person?.name ?? null };
+  logger.info(
+    `Dados Pipedrive sincronizados — org: ${org?.name ?? '—'}, CNPJ detectado: ${detectedDocument ?? 'não encontrado'}, pessoa: ${person?.name ?? '—'}`,
+  );
+  return {
+    org: org?.name ?? null,
+    person: person?.name ?? null,
+    document: detectedDocument,
+    fieldsFound: orgFields.length,
+  };
 }
 
 // ─── Listagem e detalhe ───────────────────────────────────────────────────────
