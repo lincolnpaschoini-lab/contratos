@@ -33,26 +33,32 @@ export async function sendContractToClicksign(params: {
 }): Promise<{ sent: boolean; envelopeId?: string; reason?: string }> {
   const { trackingId, tipoServico, customerName, customerEmail } = params;
 
+  console.log(`[CLICKSIGN] Iniciando envio — tracking: ${trackingId}, tipoServico: ${tipoServico}, cliente: ${customerEmail}`);
+
   if (!env.CLICKSIGN_API_KEY) {
+    console.log('[CLICKSIGN] ERRO: CLICKSIGN_API_KEY não configurada');
     logger.warn('Clicksign: CLICKSIGN_API_KEY não configurada — envio ignorado');
     return { sent: false, reason: 'API key não configurada' };
   }
 
   const templateKey = tipoServico ? TEMPLATE_MAP[tipoServico] : undefined;
   if (!templateKey) {
+    console.log(`[CLICKSIGN] AVISO: tipo_servico "${tipoServico}" sem template mapeado — disponíveis: ${Object.keys(TEMPLATE_MAP).join(', ')}`);
     logger.warn(`Clicksign: tipo_servico "${tipoServico}" sem template mapeado — envio ignorado`);
     return { sent: false, reason: `tipo_servico "${tipoServico}" sem template configurado` };
   }
+
+  console.log(`[CLICKSIGN] Template selecionado: ${templateKey}`);
 
   // 1 — Criar envelope
   const envelopeName = `${tipoServico} — ${customerName}`;
   const message = `Prezado(a), segue o contrato de serviço ${tipoServico} para sua assinatura.`;
   const envelopeId = await createEnvelope(envelopeName, message);
-  logger.info(`Clicksign: envelope criado — id: ${envelopeId}`);
+  console.log(`[CLICKSIGN] Envelope criado: ${envelopeId}`);
 
   // 2 — Adicionar documento do template
   const documentId = await addDocumentFromTemplate(envelopeId, templateKey);
-  logger.info(`Clicksign: documento adicionado — id: ${documentId}`);
+  console.log(`[CLICKSIGN] Documento adicionado: ${documentId}`);
 
   // 3 — Adicionar signatários (internos + cliente)
   const allSigners: ClicksignSigner[] = [
@@ -60,22 +66,24 @@ export async function sendContractToClicksign(params: {
     { name: customerName, email: customerEmail },
   ];
 
+  console.log(`[CLICKSIGN] Adicionando ${allSigners.length} signatário(s): ${allSigners.map(s => s.email).join(', ')}`);
+
   const signerIds: string[] = [];
   for (const signer of allSigners) {
     const signerId = await addSigner(envelopeId, signer);
     signerIds.push(signerId);
-    logger.info(`Clicksign: signatário adicionado — ${signer.email} (id: ${signerId})`);
+    console.log(`[CLICKSIGN] Signatário adicionado: ${signer.email} (id: ${signerId})`);
   }
 
   // 4 — Requisitos de assinatura: vincula cada signatário ao documento via email
   for (const signerId of signerIds) {
     await addRequirement(envelopeId, documentId, signerId);
   }
-  logger.info(`Clicksign: ${signerIds.length} requisito(s) de assinatura criado(s)`);
+  console.log(`[CLICKSIGN] ${signerIds.length} requisito(s) de assinatura criado(s)`);
 
   // 5 — Ativar envelope (draft → running) — dispara emails para os signatários
   await activateEnvelope(envelopeId);
-  logger.info(`Clicksign: envelope ativado (running) — ${envelopeId}`);
+  console.log(`[CLICKSIGN] Envelope ativado (running): ${envelopeId}`);
 
   // Salva no banco para rastreamento
   await prisma.clicksignDocument.create({
@@ -89,8 +97,37 @@ export async function sendContractToClicksign(params: {
     },
   });
 
+  console.log(`[CLICKSIGN] Envio concluído — tracking: ${trackingId}, envelope: ${envelopeId}`);
   logger.info(`Clicksign: envio concluído — tracking ${trackingId}, envelope ${envelopeId}`);
   return { sent: true, envelopeId };
+}
+
+/** Envia manualmente para o Clicksign um contrato já em Assinatura. */
+export async function sendContractToClicksignManual(trackingId: string): Promise<{ sent: boolean; envelopeId?: string; reason?: string }> {
+  const tracking = await prisma.contractTracking.findUnique({
+    where: { id: trackingId },
+    include: {
+      customer: true,
+      pipedriveDeal: true,
+      clicksignDocs: { orderBy: { createdAt: 'desc' }, take: 1 },
+    },
+  });
+
+  if (!tracking) return { sent: false, reason: 'Contrato não encontrado' };
+  if (tracking.clicksignDocs.length > 0) return { sent: false, reason: 'Já existe um envelope Clicksign para este contrato' };
+
+  const customer = tracking.customer as any;
+  const customerEmail = customer?.contactEmail ?? customer?.email ?? null;
+  if (!customerEmail) return { sent: false, reason: 'Cliente sem email cadastrado' };
+
+  const tipoServico = (tracking.pipedriveDeal as any)?.tipoServico ?? null;
+
+  return sendContractToClicksign({
+    trackingId,
+    tipoServico,
+    customerName: customer?.name ?? 'Cliente',
+    customerEmail,
+  });
 }
 
 /** Consulta o status atual do envelope no Clicksign e atualiza o banco. */

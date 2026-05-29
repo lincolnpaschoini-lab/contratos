@@ -350,6 +350,22 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
   </div>
 </div>
 
+<!-- Envio manual para Clicksign (quando está em Assinatura mas sem envelope) -->
+<% if (contract.currentStep === 'CONTRACT_SIGNING' && (!contract.clicksignDocs || contract.clicksignDocs.length === 0)) { %>
+<div class="alert alert-warning d-flex align-items-center gap-3 mb-4">
+  <i class="bi bi-exclamation-triangle fs-4"></i>
+  <div class="flex-grow-1">
+    <div class="fw-semibold">Contrato em Assinatura sem envelope Clicksign</div>
+    <div class="small text-muted">O envio automático pode ter falhado ou sido ignorado. Você pode disparar manualmente.</div>
+  </div>
+  <form method="POST" action="/contracts/<%= contract.id %>/clicksign-send">
+    <button type="submit" class="btn btn-warning">
+      <i class="bi bi-send me-1"></i>Enviar para Clicksign
+    </button>
+  </form>
+</div>
+<% } %>
+
 <!-- Integração Clicksign -->
 <% if (contract.clicksignDocs && contract.clicksignDocs.length > 0) { %>
 <%

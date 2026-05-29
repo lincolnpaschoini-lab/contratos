@@ -13,6 +13,7 @@ const HEADERS = () => ({
 
 async function apiCall<T>(method: string, path: string, body?: object): Promise<T> {
   const url = `${baseUrl()}${path}`;
+  console.log(`[CLICKSIGN API] ${method} ${path}`);
   logger.info(`Clicksign API ${method} ${path}`);
 
   const res = await fetch(url, {
@@ -23,8 +24,10 @@ async function apiCall<T>(method: string, path: string, body?: object): Promise<
 
   if (!res.ok) {
     const text = await res.text().catch(() => '');
+    console.error(`[CLICKSIGN API] ERRO ${method} ${path}: ${res.status} — ${text.slice(0, 400)}`);
     throw new Error(`Clicksign ${method} ${path}: ${res.status} — ${text.slice(0, 400)}`);
   }
+  console.log(`[CLICKSIGN API] OK ${res.status} — ${method} ${path}`);
 
   // PATCH /envelopes/{id} pode retornar 200 sem body
   if (res.status === 204 || res.headers.get('content-length') === '0') return {} as T;

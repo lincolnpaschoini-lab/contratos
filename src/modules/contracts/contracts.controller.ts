@@ -206,6 +206,22 @@ export async function syncPipedriveData(req: Request, res: Response, _next: Next
   }
 }
 
+export async function postSendToClicksign(req: Request, res: Response, _next: NextFunction) {
+  try {
+    const { sendContractToClicksignManual } = await import('../integrations/clicksign/clicksign.service');
+    const result = await sendContractToClicksignManual(req.params.id);
+
+    if (result.sent) {
+      setFlash(res, 'success', `Contrato enviado ao Clicksign. Envelope: ${result.envelopeId}`);
+    } else {
+      setFlash(res, 'error', `Não foi possível enviar: ${result.reason}`);
+    }
+  } catch (err: any) {
+    setFlash(res, 'error', `Erro ao enviar para Clicksign: ${err.message}`);
+  }
+  res.redirect(`/contracts/${req.params.id}`);
+}
+
 export async function refreshClicksign(req: Request, res: Response, _next: NextFunction) {
   try {
     const { refreshClicksignStatus } = await import('../integrations/clicksign/clicksign.service');

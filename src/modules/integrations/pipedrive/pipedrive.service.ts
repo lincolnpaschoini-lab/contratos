@@ -270,6 +270,7 @@ async function handleMoveToSigning(dealId: string, dealData: DealData, pipedrive
   }
 
   if (signingStep.status !== StepStatus.PENDING) {
+    console.log(`[PIPEDRIVE] Deal ${dealId}: Assinatura já em status "${signingStep.status}" — Clicksign NÃO será enviado automaticamente`);
     logger.info(`Deal ${dealId}: Assinatura já iniciada (status: ${signingStep.status})`);
     return { skipped: true, reason: `assinatura já em status ${signingStep.status}` };
   }
@@ -313,12 +314,21 @@ async function handleMoveToSigning(dealId: string, dealData: DealData, pipedrive
   const customerEmail = customer?.contactEmail ?? customer?.email ?? null;
   const customerName = customer?.name ?? 'Cliente';
 
+  console.log(`[PIPEDRIVE] Deal ${dealId}: preparando envio Clicksign — tipoServico: "${tipoServico}", email: "${customerEmail}"`);
+
   if (customerEmail) {
     const { sendContractToClicksign } = await import('../clicksign/clicksign.service');
     sendContractToClicksign({ trackingId: tracking.id, tipoServico, customerName, customerEmail })
-      .then((r) => logger.info(`Clicksign: ${r.sent ? `envelope ${r.envelopeId} enviado` : `ignorado — ${r.reason}`}`))
-      .catch((err) => logger.error(`Clicksign: falha ao enviar contrato do deal ${dealId} — ${err.message}`));
+      .then((r) => {
+        console.log(`[PIPEDRIVE] Clicksign: ${r.sent ? `envelope ${r.envelopeId} enviado` : `ignorado — ${r.reason}`}`);
+        logger.info(`Clicksign: ${r.sent ? `envelope ${r.envelopeId} enviado` : `ignorado — ${r.reason}`}`);
+      })
+      .catch((err) => {
+        console.error(`[PIPEDRIVE] Clicksign ERRO: ${err.message}`);
+        logger.error(`Clicksign: falha ao enviar contrato do deal ${dealId} — ${err.message}`);
+      });
   } else {
+    console.log(`[PIPEDRIVE] Deal ${dealId}: sem email do cliente — Clicksign não enviado`);
     logger.warn(`Clicksign: deal ${dealId} sem email do cliente — Clicksign não enviado`);
   }
 
