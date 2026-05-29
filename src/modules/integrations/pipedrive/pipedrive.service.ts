@@ -7,6 +7,7 @@ import {
   fetchPerson,
   extractPrimaryEmail,
   extractPrimaryPhone,
+  extractAddress,
 } from './pipedrive.api';
 
 // Suporta formato v1 (event + current) e v2 (meta.action + data)
@@ -145,6 +146,9 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
   const titleFallback = (dealData.title ?? '').replace(/\|.*$/, '').trim() || `Lead #${dealId}`;
   const customerName = org?.name ?? titleFallback;
 
+  // Extrai endereço estruturado da organização (v2 retorna objeto aninhado)
+  const addrData = org ? extractAddress(org) : { address: null, city: null, state: null, zipCode: null, country: null };
+
   await createContractFromDeal({
     externalDealId: dealId,
     title: dealData.title ?? `Negócio ${dealId}`,
@@ -157,20 +161,20 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
 
     // Dados da organização
     customerName,
-    customerEmail: extractPrimaryEmail(org?.email as any) ?? undefined,
-    customerPhone: org?.phone ?? undefined,
-    customerAddress: org?.address_formatted_address ?? org?.address ?? undefined,
-    customerCity: org?.address_locality ?? undefined,
-    customerState: org?.address_admin_area_level_1 ?? undefined,
-    customerZipCode: org?.address_postal_code ?? undefined,
-    customerCountry: org?.address_country ?? undefined,
+    customerEmail: extractPrimaryEmail(org?.email) ?? undefined,
+    customerPhone: extractPrimaryPhone(org?.phone) ?? undefined,
+    customerAddress: addrData.address ?? undefined,
+    customerCity: addrData.city ?? undefined,
+    customerState: addrData.state ?? undefined,
+    customerZipCode: addrData.zipCode ?? undefined,
+    customerCountry: addrData.country ?? undefined,
     pipedriveOrgId: dealData.org_id ? String(dealData.org_id) : undefined,
     pipedriveOrgRaw: org ? (org as unknown as object) : undefined,
 
-    // Dados do contato / pessoa responsável
+    // Dados do contato (v2 usa "emails"/"phones" no plural)
     contactName: person?.name ?? undefined,
-    contactEmail: extractPrimaryEmail(person?.email) ?? undefined,
-    contactPhone: extractPrimaryPhone(person?.phone) ?? undefined,
+    contactEmail: extractPrimaryEmail(person?.emails ?? person?.email) ?? undefined,
+    contactPhone: extractPrimaryPhone(person?.phones ?? person?.phone) ?? undefined,
     pipedrivePersonId: dealData.person_id ? String(dealData.person_id) : undefined,
     pipedrivePersonRaw: person ? (person as unknown as object) : undefined,
   });
