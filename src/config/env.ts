@@ -20,6 +20,7 @@ const envSchema = z.object({
   PIPEDRIVE_DOMAIN: z.string().optional(),
   PIPEDRIVE_PROPOSAL_ACCEPTED_STAGE_ID: z.string().default(''),
   PIPEDRIVE_CONTRACT_PREPARATION_STAGE_ID: z.string().default(''),
+  PIPEDRIVE_CONTRACT_SIGNING_STAGE_ID: z.string().default(''),
   PIPEDRIVE_WEBHOOK_SECRET: z.string().optional(),
 
   CLICKSIGN_API_KEY: z.string().optional(),
