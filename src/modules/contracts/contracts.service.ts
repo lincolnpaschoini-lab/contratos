@@ -337,6 +337,8 @@ export async function startStep(trackingId: string, stepId: string, userId: stri
 
   await updateTrackingStatus(trackingId, { currentStep: step.stepName });
   await recalculateOverallStatus(trackingId);
+
+  broadcastEvent('pipeline-updated', { trackingId, step: step.stepName });
 }
 
 export async function completeStep(
@@ -426,6 +428,7 @@ export async function completeStep(
   }
 
   logger.info(`Etapa ${step.stepName} concluída por usuário ${userId} no contrato ${trackingId}`);
+  broadcastEvent('pipeline-updated', { trackingId, step: step.stepName });
 }
 
 export async function assignStep(trackingId: string, stepId: string, assignedUserId: string, requesterId: string) {

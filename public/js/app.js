@@ -25,6 +25,34 @@ document.querySelectorAll('[data-confirm]').forEach((el) => {
   });
 });
 
+/* ── Dashboard refresh completo (métricas + pipeline) ──────────────── */
+let _lastDashboardHtml = null;
+
+async function refreshDashboard(showToastOnChange) {
+  const isDashboard = window.location.pathname === '/dashboard' || window.location.pathname === '/';
+  if (!isDashboard) return;
+  try {
+    const res = await fetch('/dashboard/content', { credentials: 'same-origin' });
+    if (!res.ok) return;
+    const html = await res.text();
+
+    if (_lastDashboardHtml !== null && html !== _lastDashboardHtml) {
+      const contentEl = document.getElementById('dashboard-content');
+      if (contentEl) {
+        const temp = document.createElement('div');
+        temp.innerHTML = html;
+        const newContent = temp.querySelector('#dashboard-content');
+        if (newContent) {
+          contentEl.replaceWith(newContent);
+          if (showToastOnChange) showToast('Dashboard atualizado.', 'info');
+        }
+      }
+    }
+
+    _lastDashboardHtml = html;
+  } catch (e) { /* silencioso */ }
+}
+
 /* ── AJAX helper ───────────────────────────────────────────────────── */
 async function apiRequest(method, url, body) {
   const res = await fetch(url, {
@@ -98,49 +126,11 @@ const POLL_INTERVAL_WEBHOOKS  = 5000;   // 5s
 
 /* ── Dashboard: polling do pipeline ────────────────────────────────── */
 (function initDashboardPolling() {
-  const isDashboard = window.location.pathname === '/dashboard' || window.location.pathname === '/';
-  if (!isDashboard) return;
+  if (window.location.pathname !== '/dashboard' && window.location.pathname !== '/') return;
 
-  let lastContractCount = null;
-
-  async function pollPipeline() {
-    try {
-      const res = await fetch('/dashboard/pipeline', { credentials: 'same-origin' });
-      if (!res.ok) return;
-
-      const html = await res.text();
-      const temp = document.createElement('div');
-      temp.innerHTML = html;
-
-      // Conta total de contratos no pipeline atual
-      const newCards = temp.querySelectorAll('.pipeline-card').length;
-
-      if (lastContractCount !== null && newCards > lastContractCount) {
-        // Novo contrato chegou — atualiza pipeline e mostra banner
-        const pipelineCard = document.querySelector('.pipeline-grid')?.closest('.card');
-        if (pipelineCard) {
-          const newCard = temp.querySelector('.card');
-          if (newCard) {
-            pipelineCard.replaceWith(newCard);
-            showToast('Pipeline atualizado — novo contrato recebido.', 'info');
-          }
-        }
-      } else if (lastContractCount !== null && newCards !== lastContractCount) {
-        // Mudança no pipeline (contrato avançou de etapa)
-        const pipelineCard = document.querySelector('.pipeline-grid')?.closest('.card');
-        if (pipelineCard) {
-          const newCard = temp.querySelector('.card');
-          if (newCard) pipelineCard.replaceWith(newCard);
-        }
-      }
-
-      lastContractCount = newCards;
-    } catch (e) { /* silencioso — sem conexão */ }
-  }
-
-  // Inicializa contagem após 2s (DOM pronto)
-  setTimeout(pollPipeline, 2000);
-  setInterval(pollPipeline, POLL_INTERVAL_DASHBOARD);
+  // Inicializa HTML de referência após 2s (DOM pronto), depois polling contínuo
+  setTimeout(() => refreshDashboard(false), 2000);
+  setInterval(() => refreshDashboard(false), POLL_INTERVAL_DASHBOARD);
 })();
 
 /* ── Webhook page: polling de novos eventos ─────────────────────────── */
@@ -215,7 +205,12 @@ function showWebhookUpdateBanner(count) {
       try {
         const data = JSON.parse(e.data);
         showNewContractBanner(data.customerName, data.trackingId);
+        refreshDashboard(false);
       } catch (err) { /* ignore */ }
+    });
+
+    evtSource.addEventListener('pipeline-updated', function () {
+      refreshDashboard(true);
     });
 
     evtSource.onerror = function () {

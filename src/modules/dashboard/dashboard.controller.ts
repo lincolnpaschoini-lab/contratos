@@ -24,3 +24,13 @@ export async function getPipelinePartial(req: Request, res: Response, next: Next
     next(err);
   }
 }
+
+// Retorna o conteúdo completo do dashboard (métricas + pipeline) sem layout
+export async function getDashboardContent(req: Request, res: Response, next: NextFunction) {
+  try {
+    const summary = await getDashboardSummary();
+    res.render('dashboard/index', { layout: false, summary });
+  } catch (err) {
+    next(err);
+  }
+}
