@@ -350,19 +350,60 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
   </div>
 </div>
 
-<!-- Dados de integração Clicksign -->
+<!-- Integração Clicksign -->
 <% if (contract.clicksignDocs && contract.clicksignDocs.length > 0) { %>
+<%
+  const csDoc = contract.clicksignDocs[0];
+  const csStatusMap = { draft: 'Rascunho', running: 'Aguardando assinaturas', closed: 'Assinado', canceled: 'Cancelado' };
+  const csStatusCss  = { draft: 'secondary', running: 'warning', closed: 'success', canceled: 'danger' };
+  const csLabel = csStatusMap[csDoc.status] || csDoc.status;
+  const csCss   = csStatusCss[csDoc.status] || 'secondary';
+  const clicksignBaseUrl = process.env.CLICKSIGN_API_URL || 'https://sandbox.clicksign.com';
+  const envelopeUrl = csDoc.externalEnvelopeId
+    ? clicksignBaseUrl.replace('/api/v3','').replace(/\/$/, '') + '/envelopes/' + csDoc.externalEnvelopeId
+    : null;
+%>
 <div class="card mb-4">
-  <div class="card-header"><i class="bi bi-pen me-2"></i>Documentos Clicksign</div>
-  <div class="card-body">
-    <% contract.clicksignDocs.forEach(doc => { %>
-    <div class="d-flex align-items-center gap-3 flex-wrap">
-      <span><strong>ID:</strong> <%= doc.externalDocumentId || '—' %></span>
-      <span class="badge bg-<%= doc.status === 'signed' ? 'success' : 'secondary' %>"><%= doc.status %></span>
-      <% if (doc.sentAt) { %><span class="small text-muted">Enviado: <%= h.formatDate(doc.sentAt) %></span><% } %>
-      <% if (doc.signedAt) { %><span class="small text-success">Assinado: <%= h.formatDate(doc.signedAt) %></span><% } %>
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <span><i class="bi bi-pen me-2"></i>Assinatura Clicksign</span>
+    <div class="d-flex gap-2">
+      <% if (envelopeUrl) { %>
+      <a href="<%= envelopeUrl %>" target="_blank" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-box-arrow-up-right me-1"></i>Ver no Clicksign
+      </a>
+      <% } %>
+      <form method="POST" action="/contracts/<%= contract.id %>/clicksign-refresh" class="d-inline">
+        <button type="submit" class="btn btn-sm btn-outline-primary">
+          <i class="bi bi-arrow-repeat me-1"></i>Atualizar status
+        </button>
+      </form>
     </div>
-    <% }); %>
+  </div>
+  <div class="card-body">
+    <div class="row g-3">
+      <div class="col-6 col-md-3">
+        <div class="small text-muted">Status</div>
+        <span class="badge bg-<%= csCss %> fs-6"><%= csLabel %></span>
+      </div>
+      <% if (csDoc.sentAt) { %>
+      <div class="col-6 col-md-3">
+        <div class="small text-muted">Enviado em</div>
+        <div class="fw-semibold"><%= h.formatDateTime(csDoc.sentAt) %></div>
+      </div>
+      <% } %>
+      <% if (csDoc.signedAt) { %>
+      <div class="col-6 col-md-3">
+        <div class="small text-muted">Assinado em</div>
+        <div class="fw-semibold text-success"><%= h.formatDateTime(csDoc.signedAt) %></div>
+      </div>
+      <% } %>
+      <% if (csDoc.externalEnvelopeId) { %>
+      <div class="col-12 col-md-6">
+        <div class="small text-muted">ID do Envelope</div>
+        <div class="fw-semibold small text-break"><%= csDoc.externalEnvelopeId %></div>
+      </div>
+      <% } %>
+    </div>
   </div>
 </div>
 <% } %>

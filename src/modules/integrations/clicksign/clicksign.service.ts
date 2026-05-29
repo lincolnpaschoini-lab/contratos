@@ -3,7 +3,15 @@ import { markSigningComplete } from '../../contracts/contracts.service';
 import { logger } from '../../../config/logger';
 import { env } from '../../../config/env';
 import crypto from 'crypto';
-import { createDocumentFromTemplate, addSignerToDocument } from './clicksign.api';
+import {
+  createEnvelope,
+  addDocumentFromTemplate,
+  addSigner,
+  addRequirement,
+  activateEnvelope,
+  getEnvelope,
+  type ClicksignSigner,
+} from './clicksign.api';
 
 // Mapeamento tipo_servico (campo Pipedrive) → chave do template no Clicksign
 const TEMPLATE_MAP: Record<string, string> = {
@@ -22,7 +30,7 @@ export async function sendContractToClicksign(params: {
   tipoServico: string | null | undefined;
   customerName: string;
   customerEmail: string;
-}): Promise<{ sent: boolean; documentKey?: string; reason?: string }> {
+}): Promise<{ sent: boolean; envelopeId?: string; reason?: string }> {
   const { trackingId, tipoServico, customerName, customerEmail } = params;
 
   if (!env.CLICKSIGN_API_KEY) {
@@ -36,34 +44,77 @@ export async function sendContractToClicksign(params: {
     return { sent: false, reason: `tipo_servico "${tipoServico}" sem template configurado` };
   }
 
+  // 1 — Criar envelope
+  const envelopeName = `${tipoServico} — ${customerName}`;
   const message = `Prezado(a), segue o contrato de serviço ${tipoServico} para sua assinatura.`;
-  const docResponse = await createDocumentFromTemplate(templateKey, message);
-  const documentKey = docResponse.document.key;
+  const envelopeId = await createEnvelope(envelopeName, message);
+  logger.info(`Clicksign: envelope criado — id: ${envelopeId}`);
 
-  logger.info(`Clicksign: documento criado — key: ${documentKey}`);
+  // 2 — Adicionar documento do template
+  const documentId = await addDocumentFromTemplate(envelopeId, templateKey);
+  logger.info(`Clicksign: documento adicionado — id: ${documentId}`);
 
-  // Signatários internos
-  for (const signer of getInternalSigners()) {
-    await addSignerToDocument(documentKey, { ...signer, auth_action: 'email' });
-    logger.info(`Clicksign: signatário interno adicionado — ${signer.email}`);
+  // 3 — Adicionar signatários (internos + cliente)
+  const allSigners: ClicksignSigner[] = [
+    ...getInternalSigners(),
+    { name: customerName, email: customerEmail },
+  ];
+
+  const signerIds: string[] = [];
+  for (const signer of allSigners) {
+    const signerId = await addSigner(envelopeId, signer);
+    signerIds.push(signerId);
+    logger.info(`Clicksign: signatário adicionado — ${signer.email} (id: ${signerId})`);
   }
 
-  // Signatário cliente
-  await addSignerToDocument(documentKey, { name: customerName, email: customerEmail, auth_action: 'email' });
-  logger.info(`Clicksign: signatário cliente adicionado — ${customerEmail}`);
+  // 4 — Requisitos de assinatura: vincula cada signatário ao documento via email
+  for (const signerId of signerIds) {
+    await addRequirement(envelopeId, documentId, signerId);
+  }
+  logger.info(`Clicksign: ${signerIds.length} requisito(s) de assinatura criado(s)`);
 
+  // 5 — Ativar envelope (draft → running) — dispara emails para os signatários
+  await activateEnvelope(envelopeId);
+  logger.info(`Clicksign: envelope ativado (running) — ${envelopeId}`);
+
+  // Salva no banco para rastreamento
   await prisma.clicksignDocument.create({
     data: {
       contractTrackingId: trackingId,
-      externalDocumentId: documentKey,
+      externalEnvelopeId: envelopeId,
+      externalDocumentId: documentId,
       status: 'running',
       sentAt: new Date(),
-      rawPayload: docResponse as any,
+      rawPayload: { envelopeId, documentId, signerIds, templateKey } as any,
     },
   });
 
-  logger.info(`Clicksign: contrato enviado — tracking ${trackingId}, documento ${documentKey}`);
-  return { sent: true, documentKey };
+  logger.info(`Clicksign: envio concluído — tracking ${trackingId}, envelope ${envelopeId}`);
+  return { sent: true, envelopeId };
+}
+
+/** Consulta o status atual do envelope no Clicksign e atualiza o banco. */
+export async function refreshClicksignStatus(trackingId: string): Promise<{
+  status: string;
+  envelopeId: string;
+} | null> {
+  const doc = await prisma.clicksignDocument.findFirst({
+    where: { contractTrackingId: trackingId },
+    orderBy: { createdAt: 'desc' },
+  });
+
+  if (!doc?.externalEnvelopeId) return null;
+
+  const envelope = await getEnvelope(doc.externalEnvelopeId);
+  const newStatus = envelope.data.attributes.status;
+
+  await prisma.clicksignDocument.update({
+    where: { id: doc.id },
+    data: { status: newStatus },
+  });
+
+  logger.info(`Clicksign: status atualizado — envelope ${doc.externalEnvelopeId}: ${newStatus}`);
+  return { status: newStatus, envelopeId: doc.externalEnvelopeId };
 }
 
 export interface ClicksignWebhookPayload {

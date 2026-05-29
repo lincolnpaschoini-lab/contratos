@@ -206,6 +206,28 @@ export async function syncPipedriveData(req: Request, res: Response, _next: Next
   }
 }
 
+export async function refreshClicksign(req: Request, res: Response, _next: NextFunction) {
+  try {
+    const { refreshClicksignStatus } = await import('../integrations/clicksign/clicksign.service');
+    const result = await refreshClicksignStatus(req.params.id);
+
+    if (!result) {
+      setFlash(res, 'error', 'Nenhum envelope Clicksign encontrado para este contrato.');
+    } else {
+      const labels: Record<string, string> = {
+        draft: 'Rascunho',
+        running: 'Aguardando assinaturas',
+        closed: 'Assinado',
+        canceled: 'Cancelado',
+      };
+      setFlash(res, 'success', `Status Clicksign atualizado: ${labels[result.status] ?? result.status}`);
+    }
+  } catch (err: any) {
+    setFlash(res, 'error', `Erro ao consultar Clicksign: ${err.message}`);
+  }
+  res.redirect(`/contracts/${req.params.id}`);
+}
+
 export async function deleteContract(req: Request, res: Response, _next: NextFunction) {
   try {
     const tracking = await prisma.contractTracking.findUnique({
