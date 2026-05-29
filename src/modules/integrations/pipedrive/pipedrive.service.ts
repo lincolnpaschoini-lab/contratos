@@ -47,6 +47,7 @@ interface DealData {
   org_name?: string;
   person_id?: number;
   org_id?: number;
+  owner_id?: number | string;
   pipeline_id?: number;
   status?: string;
 }
@@ -124,7 +125,7 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
   const proposalStageId = env.PIPEDRIVE_PROPOSAL_ACCEPTED_STAGE_ID;
   const prepStageId = env.PIPEDRIVE_CONTRACT_PREPARATION_STAGE_ID;
   const signingStageId = env.PIPEDRIVE_CONTRACT_SIGNING_STAGE_ID;
-  const pipedriveUserId = payload.meta?.user_id;
+  const pipedriveUserId = dealData.owner_id ?? payload.meta?.user_id;
 
   logger.info(`Pipedrive deal ${dealId}: stage ${previousStageId} → ${currentStageId}`);
 
@@ -154,11 +155,12 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
     return { skipped: true, reason: 'deal já processado anteriormente' };
   }
 
-  // Busca dados enriquecidos em paralelo: org, pessoa e campos de org
-  const [org, person, orgFields] = await Promise.all([
+  // Busca dados enriquecidos em paralelo: org, pessoa, campos de org e owner
+  const [org, person, orgFields, ownerUser] = await Promise.all([
     dealData.org_id ? fetchOrganization(dealData.org_id) : Promise.resolve(null),
     dealData.person_id ? fetchPerson(dealData.person_id) : Promise.resolve(null),
     fetchOrganizationFields(),
+    dealData.owner_id ? fetchPipedriveUser(dealData.owner_id) : Promise.resolve(null),
   ]);
 
   const titleFallback = (dealData.title ?? '').replace(/\|.*$/, '').trim() || `Lead #${dealId}`;
@@ -198,6 +200,7 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
     contactPhone: extractPrimaryPhone(person?.phones ?? person?.phone) ?? undefined,
     pipedrivePersonId: dealData.person_id ? String(dealData.person_id) : undefined,
     pipedrivePersonRaw: person ? (person as unknown as object) : undefined,
+    pipedriveOwnerName: ownerUser?.name ?? undefined,
   });
 
   logger.info(`Contrato criado para deal Pipedrive ${dealId}: "${dealData.title}" — org: ${org?.name ?? 'sem org'}, pessoa: ${person?.name ?? 'sem pessoa'}`);

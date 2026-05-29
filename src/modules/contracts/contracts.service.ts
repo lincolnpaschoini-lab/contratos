@@ -56,6 +56,7 @@ export async function createContractFromDeal(params: {
   pipedrivePersonId?: string;
   pipedriveOrgRaw?: object;
   pipedrivePersonRaw?: object;
+  pipedriveOwnerName?: string;
   rawPayload?: object;
   proposalAcceptedAt?: Date;
 }) {
@@ -178,7 +179,11 @@ export async function createContractFromDeal(params: {
       fromStatus: null,
       toStatus: StepStatus.COMPLETED,
       changeReason: 'Proposta aceita via Pipedrive',
-      metadata: { source: 'pipedrive', externalDealId: params.externalDealId },
+      metadata: {
+        source: 'pipedrive',
+        externalDealId: params.externalDealId,
+        ...(params.pipedriveOwnerName && { pipedriveUser: { name: params.pipedriveOwnerName } }),
+      },
     },
   });
 
