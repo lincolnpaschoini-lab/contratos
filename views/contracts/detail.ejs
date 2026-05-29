@@ -232,6 +232,12 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
             <span class="badge bg-<%= statusClass %> ms-1 small"><%= h.STEP_STATUS_LABELS[step.status] %></span>
           </div>
 
+          <%
+            const pipedriveInitHistory = step.histories && step.histories.find(function(h2) {
+              return h2.metadata && h2.metadata.pipedriveUser;
+            });
+            const pipedriveInitUser = pipedriveInitHistory && pipedriveInitHistory.metadata && pipedriveInitHistory.metadata.pipedriveUser;
+          %>
           <div class="timeline-meta">
             <% if (step.startedAt) { %>
             <span><i class="bi bi-play-circle me-1"></i>Iniciado: <%= h.formatDateTime(step.startedAt) %></span>
@@ -247,6 +253,9 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
             <% } %>
             <% if (step.assignedUser) { %>
             <span><i class="bi bi-person me-1"></i><%= step.assignedUser.name %></span>
+            <% } %>
+            <% if (pipedriveInitUser) { %>
+            <span class="text-muted"><i class="bi bi-diagram-3 me-1"></i>Pipedrive: <strong><%= pipedriveInitUser.name %></strong></span>
             <% } %>
           </div>
 
@@ -314,6 +323,8 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
                   <% } %>
                   <% if (h2.changedByUser) { %>
                   <div class="text-muted small"><i class="bi bi-person me-1"></i><%= h2.changedByUser.name %></div>
+                  <% } else if (h2.metadata && h2.metadata.pipedriveUser) { %>
+                  <div class="text-muted small"><i class="bi bi-diagram-3 me-1"></i>Pipedrive: <%= h2.metadata.pipedriveUser.name %></div>
                   <% } %>
                 </div>
                 <% }); %>

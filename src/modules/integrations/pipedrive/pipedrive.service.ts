@@ -6,6 +6,7 @@ import {
   fetchOrganization,
   fetchPerson,
   fetchOrganizationFields,
+  fetchPipedriveUser,
   extractPrimaryEmail,
   extractPrimaryPhone,
   extractAddress,
@@ -27,6 +28,7 @@ export interface PipedriveWebhookPayload {
     object?: string;
     version?: string;
     entity_id?: string;
+    user_id?: string | number;
   };
   previous?: {
     stage_id?: number | string;
@@ -122,17 +124,18 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
   const proposalStageId = env.PIPEDRIVE_PROPOSAL_ACCEPTED_STAGE_ID;
   const prepStageId = env.PIPEDRIVE_CONTRACT_PREPARATION_STAGE_ID;
   const signingStageId = env.PIPEDRIVE_CONTRACT_SIGNING_STAGE_ID;
+  const pipedriveUserId = payload.meta?.user_id;
 
   logger.info(`Pipedrive deal ${dealId}: stage ${previousStageId} → ${currentStageId}`);
 
   // ── Estágio "Assinatura do Contrato" (57): avança contrato existente ─────
   if (signingStageId && currentStageId === signingStageId && previousStageId !== signingStageId) {
-    return handleMoveToSigning(dealId, dealData);
+    return handleMoveToSigning(dealId, dealData, pipedriveUserId);
   }
 
   // ── Estágio "Preparação do Contrato" (56): avança contrato existente ──────
   if (prepStageId && currentStageId === prepStageId && previousStageId !== prepStageId) {
-    return handleMoveToPreparation(dealId, dealData);
+    return handleMoveToPreparation(dealId, dealData, pipedriveUserId);
   }
 
   // ── Estágio "Proposta Aceita" (55): cria novo contrato ───────────────────
@@ -201,7 +204,7 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
   return { created: true, externalDealId: dealId };
 }
 
-async function handleMoveToPreparation(dealId: string, dealData: DealData) {
+async function handleMoveToPreparation(dealId: string, dealData: DealData, pipedriveUserId?: string | number) {
   const existingDeal = await prisma.pipedriveDeal.findUnique({
     where: { externalDealId: dealId },
     include: { contractTracking: { include: { steps: true } } },
@@ -226,14 +229,16 @@ async function handleMoveToPreparation(dealId: string, dealData: DealData) {
     return { skipped: true, reason: `preparação já em status ${prepStep.status}` };
   }
 
-  // Inicia a etapa de preparação (como se o usuário tivesse clicado "Iniciar Etapa")
-  await startStep(tracking.id, prepStep.id, 'system-pipedrive');
-  logger.info(`Deal ${dealId}: Preparação do Contrato iniciada via Pipedrive (estágio ${dealData.stage_id})`);
+  const pipedriveUser = pipedriveUserId ? await fetchPipedriveUser(pipedriveUserId) : null;
+  const stepMetadata = { source: 'pipedrive', ...(pipedriveUser && { pipedriveUser: { id: pipedriveUserId, name: pipedriveUser.name } }) };
+
+  await startStep(tracking.id, prepStep.id, 'system-pipedrive', stepMetadata);
+  logger.info(`Deal ${dealId}: Preparação do Contrato iniciada via Pipedrive (estágio ${dealData.stage_id}) por ${pipedriveUser?.name ?? pipedriveUserId ?? 'desconhecido'}`);
 
   return { advanced: true, trackingId: tracking.id, step: 'CONTRACT_PREPARATION' };
 }
 
-async function handleMoveToSigning(dealId: string, dealData: DealData) {
+async function handleMoveToSigning(dealId: string, dealData: DealData, pipedriveUserId?: string | number) {
   const existingDeal = await prisma.pipedriveDeal.findUnique({
     where: { externalDealId: dealId },
     include: { contractTracking: { include: { steps: true } } },
@@ -258,15 +263,18 @@ async function handleMoveToSigning(dealId: string, dealData: DealData) {
     return { skipped: true, reason: `assinatura já em status ${signingStep.status}` };
   }
 
+  const pipedriveUser = pipedriveUserId ? await fetchPipedriveUser(pipedriveUserId) : null;
+  const stepMetadata = { source: 'pipedrive', ...(pipedriveUser && { pipedriveUser: { id: pipedriveUserId, name: pipedriveUser.name } }) };
+
   // Garante que Preparação está concluída antes de iniciar Assinatura.
   // completeStep auto-inicia a próxima etapa (Assinatura), evitando dupla chamada.
   const prepStep = tracking.steps.find((s) => s.stepName === 'CONTRACT_PREPARATION');
   if (prepStep) {
     if (prepStep.status === StepStatus.PENDING) {
-      await startStep(tracking.id, prepStep.id, 'system-pipedrive');
-      await completeStep(tracking.id, prepStep.id, 'system-pipedrive', 'Preparação concluída via mudança de estágio no Pipedrive');
+      await startStep(tracking.id, prepStep.id, 'system-pipedrive', stepMetadata);
+      await completeStep(tracking.id, prepStep.id, 'system-pipedrive', 'Preparação concluída via mudança de estágio no Pipedrive', stepMetadata);
     } else if (prepStep.status === StepStatus.IN_PROGRESS) {
-      await completeStep(tracking.id, prepStep.id, 'system-pipedrive', 'Preparação concluída via mudança de estágio no Pipedrive');
+      await completeStep(tracking.id, prepStep.id, 'system-pipedrive', 'Preparação concluída via mudança de estágio no Pipedrive', stepMetadata);
     }
     // Se já estava COMPLETED, CONTRACT_SIGNING continua PENDING e cai no startStep abaixo
   }
@@ -274,10 +282,10 @@ async function handleMoveToSigning(dealId: string, dealData: DealData) {
   // Se completeStep já auto-iniciou a Assinatura, não chama startStep novamente
   const freshSigning = await prisma.contractStep.findUnique({ where: { id: signingStep.id } });
   if (freshSigning && freshSigning.status === StepStatus.PENDING) {
-    await startStep(tracking.id, signingStep.id, 'system-pipedrive');
+    await startStep(tracking.id, signingStep.id, 'system-pipedrive', stepMetadata);
   }
 
-  logger.info(`Deal ${dealId}: Assinatura do Contrato iniciada via Pipedrive (estágio ${dealData.stage_id})`);
+  logger.info(`Deal ${dealId}: Assinatura do Contrato iniciada via Pipedrive (estágio ${dealData.stage_id}) por ${pipedriveUser?.name ?? pipedriveUserId ?? 'desconhecido'}`);
   return { advanced: true, trackingId: tracking.id, step: 'CONTRACT_SIGNING' };
 }
 

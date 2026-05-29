@@ -100,7 +100,19 @@ export interface PipedriveField {
   field_type: string;
 }
 
+export interface PipedriveUser {
+  id: number;
+  name: string;
+  email: string;
+}
+
 // ─── Funções de busca ─────────────────────────────────────────────────────────
+
+export async function fetchPipedriveUser(userId: number | string): Promise<PipedriveUser | null> {
+  const data = await apiGet<PipedriveUser>(`/users/${userId}`);
+  if (data) logger.info(`Pipedrive: usuário ${userId} recuperado — ${data.name}`);
+  return data;
+}
 
 export async function fetchOrganization(orgId: number | string): Promise<PipedriveOrganization | null> {
   const data = await apiGet<PipedriveOrganization>(`/organizations/${orgId}`);

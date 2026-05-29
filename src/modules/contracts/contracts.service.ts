@@ -293,7 +293,7 @@ export async function getContractDetail(id: string) {
 
 // ─── Atualização de etapas ────────────────────────────────────────────────────
 
-export async function startStep(trackingId: string, stepId: string, userId: string | null) {
+export async function startStep(trackingId: string, stepId: string, userId: string | null, metadata?: object) {
   const step = await findStepById(stepId);
   if (!step || step.contractTrackingId !== trackingId) {
     throw new AppError('Etapa não encontrada.', 404);
@@ -327,6 +327,7 @@ export async function startStep(trackingId: string, stepId: string, userId: stri
     changeReason: userId === 'system-pipedrive'
       ? 'Etapa iniciada via mudança de estágio no Pipedrive'
       : 'Etapa iniciada manualmente',
+    metadata: metadata ?? (userId === 'system-pipedrive' ? { source: 'pipedrive' } : null),
   });
 
   await updateStep(stepId, {
@@ -346,6 +347,7 @@ export async function completeStep(
   stepId: string,
   userId: string,
   notes?: string,
+  metadata?: object,
 ) {
   const step = await findStepById(stepId);
   if (!step || step.contractTrackingId !== trackingId) {
@@ -375,6 +377,7 @@ export async function completeStep(
     toStatus: StepStatus.COMPLETED,
     changedByUserId: userId !== 'system-pipedrive' ? userId : null,
     changeReason: notes ?? 'Etapa concluída manualmente',
+    metadata: metadata ?? (userId === 'system-pipedrive' ? { source: 'pipedrive' } : null),
   });
 
   await updateStep(stepId, {
