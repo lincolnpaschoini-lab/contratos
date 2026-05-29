@@ -50,6 +50,7 @@ interface DealData {
   owner_id?: number | string;
   pipeline_id?: number;
   status?: string;
+  custom_fields?: Record<string, unknown>;
 }
 
 // Normaliza payload v1 e v2 para uma estrutura única
@@ -241,10 +242,12 @@ async function handleMoveToPreparation(dealId: string, dealData: DealData, piped
   return { advanced: true, trackingId: tracking.id, step: 'CONTRACT_PREPARATION' };
 }
 
+const TIPO_SERVICO_FIELD = 'b9e2317c3051565d2ad79d04ce9d8b9143ac1fc8';
+
 async function handleMoveToSigning(dealId: string, dealData: DealData, pipedriveUserId?: string | number) {
   const existingDeal = await prisma.pipedriveDeal.findUnique({
     where: { externalDealId: dealId },
-    include: { contractTracking: { include: { steps: true } } },
+    include: { contractTracking: { include: { steps: true, customer: true } } },
   });
 
   if (!existingDeal?.contractTracking) {
@@ -289,6 +292,22 @@ async function handleMoveToSigning(dealId: string, dealData: DealData, pipedrive
   }
 
   logger.info(`Deal ${dealId}: Assinatura do Contrato iniciada via Pipedrive (estágio ${dealData.stage_id}) por ${pipedriveUser?.name ?? pipedriveUserId ?? 'desconhecido'}`);
+
+  // Envia contrato para assinatura no Clicksign
+  const customer = (existingDeal.contractTracking as any).customer;
+  const customerEmail = customer?.contactEmail ?? customer?.email ?? null;
+  const customerName = customer?.name ?? 'Cliente';
+  const tipoServico = dealData.custom_fields?.[TIPO_SERVICO_FIELD] as string | null ?? null;
+
+  if (customerEmail) {
+    const { sendContractToClicksign } = await import('../clicksign/clicksign.service');
+    sendContractToClicksign({ trackingId: tracking.id, tipoServico, customerName, customerEmail })
+      .then((r) => logger.info(`Clicksign: ${r.sent ? `documento ${r.documentKey} enviado` : `ignorado — ${r.reason}`}`))
+      .catch((err) => logger.error(`Clicksign: falha ao enviar contrato do deal ${dealId} — ${err.message}`));
+  } else {
+    logger.warn(`Clicksign: deal ${dealId} sem email do cliente — Clicksign não enviado`);
+  }
+
   return { advanced: true, trackingId: tracking.id, step: 'CONTRACT_SIGNING' };
 }
 

@@ -3,6 +3,68 @@ import { markSigningComplete } from '../../contracts/contracts.service';
 import { logger } from '../../../config/logger';
 import { env } from '../../../config/env';
 import crypto from 'crypto';
+import { createDocumentFromTemplate, addSignerToDocument } from './clicksign.api';
+
+// Mapeamento tipo_servico (campo Pipedrive) → chave do template no Clicksign
+const TEMPLATE_MAP: Record<string, string> = {
+  'Continuado PF': 'dc4fdb62-cd1c-4e4a-b6ce-d393b5d06c80',
+  'Continuado PJ': '29878949-500b-468d-a62e-e98a7f9bed3f',
+};
+
+function getInternalSigners(): Array<{ name: string; email: string }> {
+  const emails = env.CLICKSIGN_INTERNAL_SIGNER_EMAILS.split(',').map((e) => e.trim()).filter(Boolean);
+  const names = env.CLICKSIGN_INTERNAL_SIGNER_NAMES.split(',').map((n) => n.trim()).filter(Boolean);
+  return emails.map((email, i) => ({ email, name: names[i] ?? email }));
+}
+
+export async function sendContractToClicksign(params: {
+  trackingId: string;
+  tipoServico: string | null | undefined;
+  customerName: string;
+  customerEmail: string;
+}): Promise<{ sent: boolean; documentKey?: string; reason?: string }> {
+  const { trackingId, tipoServico, customerName, customerEmail } = params;
+
+  if (!env.CLICKSIGN_API_KEY) {
+    logger.warn('Clicksign: CLICKSIGN_API_KEY não configurada — envio ignorado');
+    return { sent: false, reason: 'API key não configurada' };
+  }
+
+  const templateKey = tipoServico ? TEMPLATE_MAP[tipoServico] : undefined;
+  if (!templateKey) {
+    logger.warn(`Clicksign: tipo_servico "${tipoServico}" sem template mapeado — envio ignorado`);
+    return { sent: false, reason: `tipo_servico "${tipoServico}" sem template configurado` };
+  }
+
+  const message = `Prezado(a), segue o contrato de serviço ${tipoServico} para sua assinatura.`;
+  const docResponse = await createDocumentFromTemplate(templateKey, message);
+  const documentKey = docResponse.document.key;
+
+  logger.info(`Clicksign: documento criado — key: ${documentKey}`);
+
+  // Signatários internos
+  for (const signer of getInternalSigners()) {
+    await addSignerToDocument(documentKey, { ...signer, auth_action: 'email' });
+    logger.info(`Clicksign: signatário interno adicionado — ${signer.email}`);
+  }
+
+  // Signatário cliente
+  await addSignerToDocument(documentKey, { name: customerName, email: customerEmail, auth_action: 'email' });
+  logger.info(`Clicksign: signatário cliente adicionado — ${customerEmail}`);
+
+  await prisma.clicksignDocument.create({
+    data: {
+      contractTrackingId: trackingId,
+      externalDocumentId: documentKey,
+      status: 'running',
+      sentAt: new Date(),
+      rawPayload: docResponse as any,
+    },
+  });
+
+  logger.info(`Clicksign: contrato enviado — tracking ${trackingId}, documento ${documentKey}`);
+  return { sent: true, documentKey };
+}
 
 export interface ClicksignWebhookPayload {
   event?: {

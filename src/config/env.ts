@@ -26,6 +26,8 @@ const envSchema = z.object({
   CLICKSIGN_API_KEY: z.string().optional(),
   CLICKSIGN_API_URL: z.string().url().default('https://sandbox.clicksign.com'),
   CLICKSIGN_WEBHOOK_TOKEN: z.string().optional(),
+  CLICKSIGN_INTERNAL_SIGNER_EMAILS: z.string().default(''),
+  CLICKSIGN_INTERNAL_SIGNER_NAMES: z.string().default(''),
 
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
   LOG_FILE_PATH: z.string().default('./logs'),
