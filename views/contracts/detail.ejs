@@ -32,6 +32,11 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
         <i class="bi bi-person-gear me-1"></i>Atribuir
       </button>
       <% if (locals.currentUser && locals.currentUser.role === 'ADMIN') { %>
+      <form method="POST" action="/contracts/<%= contract.id %>/sync-pipedrive" class="d-inline">
+        <button type="submit" class="btn btn-sm btn-outline-info" title="Re-buscar dados da empresa e contato no Pipedrive">
+          <i class="bi bi-arrow-repeat me-1"></i>Sincronizar Pipedrive
+        </button>
+      </form>
       <button class="btn btn-sm btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalDelete">
         <i class="bi bi-trash me-1"></i>Excluir
       </button>

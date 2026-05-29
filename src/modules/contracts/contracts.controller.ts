@@ -11,6 +11,7 @@ import {
   assignStep,
   updateStepNotes,
   assignTracking,
+  syncContractPipedriveData,
 } from './contracts.service';
 import { ContractStatus, StepName } from '@prisma/client';
 
@@ -184,6 +185,23 @@ export async function postAssignTracking(req: Request, res: Response, next: Next
       return res.status(400).json({ success: false, message: err.message });
     }
     setFlash(res, 'error', err.message ?? 'Erro ao atribuir responsável.');
+    res.redirect(`/contracts/${req.params.id}`);
+  }
+}
+
+export async function syncPipedriveData(req: Request, res: Response, _next: NextFunction) {
+  try {
+    const result = await syncContractPipedriveData(req.params.id);
+    if (req.headers.accept?.includes('application/json')) {
+      return res.json({ success: true, message: `Dados sincronizados — ${result.org ?? 'sem org'} / ${result.person ?? 'sem pessoa'}` });
+    }
+    setFlash(res, 'success', `Dados do Pipedrive atualizados com sucesso.`);
+    res.redirect(`/contracts/${req.params.id}`);
+  } catch (err: any) {
+    if (req.headers.accept?.includes('application/json')) {
+      return res.status(err.statusCode ?? 500).json({ success: false, message: err.message });
+    }
+    setFlash(res, 'error', err.message ?? 'Erro ao sincronizar dados.');
     res.redirect(`/contracts/${req.params.id}`);
   }
 }

@@ -185,6 +185,64 @@ export async function createContractFromDeal(params: {
   return tracking;
 }
 
+// ─── Sincronização com Pipedrive ──────────────────────────────────────────────
+
+export async function syncContractPipedriveData(trackingId: string) {
+  const tracking = await findTrackingById(trackingId);
+  if (!tracking) throw new AppError('Contrato não encontrado.', 404);
+
+  const customer = tracking.customer as any;
+  const orgId = customer.pipedriveOrgId;
+  const personId = customer.pipedrivePersonId;
+
+  if (!orgId && !personId) {
+    throw new AppError('Nenhum ID de organização ou pessoa do Pipedrive vinculado a este cliente.', 400);
+  }
+
+  // Importa dinamicamente para evitar dependência circular
+  const { fetchOrganization, fetchPerson, extractPrimaryEmail, extractPrimaryPhone, extractAddress } =
+    await import('../integrations/pipedrive/pipedrive.api');
+
+  const [org, person] = await Promise.all([
+    orgId ? fetchOrganization(orgId) : Promise.resolve(null),
+    personId ? fetchPerson(personId) : Promise.resolve(null),
+  ]);
+
+  if (!org && !person) {
+    throw new AppError('Não foi possível buscar dados do Pipedrive. Verifique se PIPEDRIVE_API_TOKEN e PIPEDRIVE_DOMAIN estão configurados.', 503);
+  }
+
+  const addrData = org
+    ? extractAddress(org)
+    : { address: null, city: null, state: null, zipCode: null, country: null };
+
+  await prisma.customer.update({
+    where: { id: customer.id },
+    data: {
+      ...(org && {
+        name: org.name,
+        email: extractPrimaryEmail(org.email) ?? undefined,
+        phone: extractPrimaryPhone(org.phone) ?? undefined,
+        address: addrData.address ?? undefined,
+        city: addrData.city ?? undefined,
+        state: addrData.state ?? undefined,
+        zipCode: addrData.zipCode ?? undefined,
+        country: addrData.country ?? undefined,
+        pipedriveOrgRaw: org as any,
+      }),
+      ...(person && {
+        contactName: person.name,
+        contactEmail: extractPrimaryEmail((person as any).emails ?? person.email) ?? undefined,
+        contactPhone: extractPrimaryPhone((person as any).phones ?? person.phone) ?? undefined,
+        pipedrivePersonRaw: person as any,
+      }),
+    },
+  });
+
+  logger.info(`Dados Pipedrive sincronizados para contrato ${trackingId} — org: ${org?.name ?? '—'}, pessoa: ${person?.name ?? '—'}`);
+  return { org: org?.name ?? null, person: person?.name ?? null };
+}
+
 // ─── Listagem e detalhe ───────────────────────────────────────────────────────
 
 export async function listContracts(filters: ContractFilters, pagination: PaginationParams) {
