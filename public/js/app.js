@@ -1,3 +1,4 @@
+
 /* ── Sidebar toggle ─────────────────────────────────────────────────── */
 function toggleSidebar() {
   const sidebar = document.getElementById('sidebar');
@@ -78,4 +79,105 @@ function createToastContainer() {
   div.style.zIndex = '9999';
   document.body.appendChild(div);
   return div;
+}
+
+/* ── SSE — notificações em tempo real ──────────────────────────────── */
+(function initSSE() {
+  if (typeof EventSource === 'undefined') return;
+
+  let retryDelay = 3000;
+  let reloadTimer = null;
+
+  function connect() {
+    const evtSource = new EventSource('/events');
+
+    evtSource.addEventListener('new-contract', function (e) {
+      try {
+        const data = JSON.parse(e.data);
+        const name = data.customerName || data.dealTitle || 'Novo lead';
+
+        // Banner de notificação persistente com botão de atualizar
+        showNewContractBanner(name, data.trackingId);
+
+        // Se estiver no dashboard, atualiza o pipeline automaticamente após 4s
+        if (window.location.pathname === '/dashboard' || window.location.pathname === '/') {
+          if (reloadTimer) clearTimeout(reloadTimer);
+          reloadTimer = setTimeout(function () {
+            reloadPipelineSection();
+          }, 4000);
+        }
+      } catch (err) {
+        console.error('SSE parse error:', err);
+      }
+    });
+
+    evtSource.onerror = function () {
+      evtSource.close();
+      // Reconecta com backoff exponencial (máx 30s)
+      retryDelay = Math.min(retryDelay * 2, 30000);
+      setTimeout(connect, retryDelay);
+    };
+
+    evtSource.onopen = function () {
+      retryDelay = 3000; // reseta delay ao reconectar
+    };
+  }
+
+  connect();
+})();
+
+/* Banner de novo contrato */
+function showNewContractBanner(customerName, trackingId) {
+  const existing = document.getElementById('newContractBanner');
+  if (existing) existing.remove();
+
+  const div = document.createElement('div');
+  div.id = 'newContractBanner';
+  div.className = 'new-contract-banner';
+  div.innerHTML =
+    '<div class="d-flex align-items-center gap-3">' +
+    '<div class="new-contract-icon"><i class="bi bi-star-fill"></i></div>' +
+    '<div>' +
+    '<div class="fw-semibold">Nova proposta aceita!</div>' +
+    '<div class="small opacity-75">' + customerName + '</div>' +
+    '</div>' +
+    '<div class="ms-auto d-flex gap-2">' +
+    (trackingId ? '<a href="/contracts/' + trackingId + '" class="btn btn-sm btn-light">Ver contrato</a>' : '') +
+    '<button class="btn btn-sm btn-outline-light" onclick="reloadPipelineSection()">Atualizar</button>' +
+    '<button class="btn btn-sm btn-close btn-close-white" onclick="this.closest(\'.new-contract-banner\').remove()"></button>' +
+    '</div></div>';
+
+  document.body.appendChild(div);
+
+  // Remove automaticamente após 15s
+  setTimeout(function () { div.remove(); }, 15000);
+}
+
+/* Recarrega apenas a seção do pipeline sem refresh total */
+async function reloadPipelineSection() {
+  const banner = document.getElementById('newContractBanner');
+  if (banner) banner.remove();
+
+  try {
+    const res = await fetch('/dashboard/pipeline', { headers: { Accept: 'application/json' } });
+    if (!res.ok) { window.location.reload(); return; }
+
+    const html = await res.text();
+    const pipelineCard = document.querySelector('.pipeline-grid')?.closest('.card');
+    if (pipelineCard) {
+      // Substitui o card do pipeline com a versão atualizada
+      const temp = document.createElement('div');
+      temp.innerHTML = html;
+      const newCard = temp.querySelector('.card');
+      if (newCard) {
+        pipelineCard.replaceWith(newCard);
+        showToast('Pipeline atualizado.', 'info');
+        return;
+      }
+    }
+    // Fallback: reload completo
+    window.location.reload();
+  } catch {
+    window.location.reload();
+  }
 }

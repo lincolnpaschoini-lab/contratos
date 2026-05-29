@@ -5,9 +5,12 @@ import { env } from '../../../config/env';
 import {
   fetchOrganization,
   fetchPerson,
+  fetchOrganizationFields,
   extractPrimaryEmail,
   extractPrimaryPhone,
   extractAddress,
+  buildLabeledFields,
+  detectDocument,
 } from './pipedrive.api';
 
 // Suporta formato v1 (event + current) e v2 (meta.action + data)
@@ -136,18 +139,21 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
     return { skipped: true, reason: 'deal já processado anteriormente' };
   }
 
-  // Busca dados enriquecidos da organização e da pessoa em paralelo
-  const [org, person] = await Promise.all([
+  // Busca dados enriquecidos em paralelo: org, pessoa e campos de org
+  const [org, person, orgFields] = await Promise.all([
     dealData.org_id ? fetchOrganization(dealData.org_id) : Promise.resolve(null),
     dealData.person_id ? fetchPerson(dealData.person_id) : Promise.resolve(null),
+    fetchOrganizationFields(),
   ]);
 
-  // Nome do cliente: organização > título do deal
   const titleFallback = (dealData.title ?? '').replace(/\|.*$/, '').trim() || `Lead #${dealId}`;
   const customerName = org?.name ?? titleFallback;
-
-  // Extrai endereço estruturado da organização (v2 retorna objeto aninhado)
   const addrData = org ? extractAddress(org) : { address: null, city: null, state: null, zipCode: null, country: null };
+
+  // Detecta CNPJ nos campos customizados da org
+  const detectedDocument = org ? detectDocument(org as Record<string, unknown>, orgFields) : null;
+  const orgLabeled = org ? buildLabeledFields(org as Record<string, unknown>, orgFields) : null;
+  const enrichedOrgRaw = org ? { ...org, _labeled: orgLabeled } : null;
 
   await createContractFromDeal({
     externalDealId: dealId,
@@ -159,7 +165,6 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
     rawPayload: payload as object,
     proposalAcceptedAt: new Date(),
 
-    // Dados da organização
     customerName,
     customerEmail: extractPrimaryEmail(org?.email) ?? undefined,
     customerPhone: extractPrimaryPhone(org?.phone) ?? undefined,
@@ -167,9 +172,10 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
     customerCity: addrData.city ?? undefined,
     customerState: addrData.state ?? undefined,
     customerZipCode: addrData.zipCode ?? undefined,
+    customerDocument: detectedDocument ?? undefined,
     customerCountry: addrData.country ?? undefined,
     pipedriveOrgId: dealData.org_id ? String(dealData.org_id) : undefined,
-    pipedriveOrgRaw: org ? (org as unknown as object) : undefined,
+    pipedriveOrgRaw: enrichedOrgRaw as object ?? undefined,
 
     // Dados do contato (v2 usa "emails"/"phones" no plural)
     contactName: person?.name ?? undefined,

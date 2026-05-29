@@ -3,6 +3,7 @@ import { prisma } from '../../config/database';
 import { AppError } from '../../shared/middlewares/error.middleware';
 import { addBusinessDays, isOverdue } from '../../shared/utils/business-days';
 import { logger } from '../../config/logger';
+import { broadcastEvent } from '../../shared/events/sse.service';
 import {
   findAllTrackings,
   findTrackingById,
@@ -182,6 +183,15 @@ export async function createContractFromDeal(params: {
   });
 
   logger.info(`Contrato criado para deal ${params.externalDealId}: tracking ${tracking.id}`);
+
+  // Notifica browsers conectados via SSE
+  broadcastEvent('new-contract', {
+    trackingId: tracking.id,
+    customerName: params.customerName,
+    dealTitle: params.title,
+    value: params.value,
+  });
+
   return tracking;
 }
 

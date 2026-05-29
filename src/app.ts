@@ -21,6 +21,9 @@ import {
 } from './shared/utils/format';
 
 import { authRoutes } from './modules/auth/auth.routes';
+import { addSseClient } from './shared/events/sse.service';
+import { requireAuth } from './shared/middlewares/auth.middleware';
+import { v4 as uuidv4 } from 'uuid';
 import { contractRoutes } from './modules/contracts/contracts.routes';
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes';
 import { userRoutes } from './modules/users/users.routes';
@@ -79,9 +82,15 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(process.cwd(), 'public')));
 app.use(authContextMiddleware);
 
-// Healthcheck (sem rate limit)
+// Healthcheck
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), env: env.NODE_ENV });
+});
+
+// SSE — notificações em tempo real para o browser
+app.get('/events', requireAuth, (req, res) => {
+  const clientId = uuidv4();
+  addSseClient(clientId, res);
 });
 
 app.use(defaultRateLimit);
