@@ -316,7 +316,7 @@ async function handleMoveToSigning(dealId: string, dealData: DealData, pipedrive
   if (customerEmail) {
     const { sendContractToClicksign } = await import('../clicksign/clicksign.service');
     sendContractToClicksign({ trackingId: tracking.id, tipoServico, customerName, customerEmail })
-      .then((r) => logger.info(`Clicksign: ${r.sent ? `documento ${r.documentKey} enviado` : `ignorado — ${r.reason}`}`))
+      .then((r) => logger.info(`Clicksign: ${r.sent ? `envelope ${r.envelopeId} enviado` : `ignorado — ${r.reason}`}`))
       .catch((err) => logger.error(`Clicksign: falha ao enviar contrato do deal ${dealId} — ${err.message}`));
   } else {
     logger.warn(`Clicksign: deal ${dealId} sem email do cliente — Clicksign não enviado`);
