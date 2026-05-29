@@ -98,6 +98,7 @@ export interface PipedriveField {
   key: string;         // hash ou nome padrão
   name: string;        // label legível (ex: "CNPJ")
   field_type: string;
+  options?: Array<{ id: number; label: string }>;
 }
 
 export interface PipedriveUser {
@@ -136,6 +137,40 @@ export async function fetchOrganizationFields(): Promise<PipedriveField[]> {
 export async function fetchPersonFields(): Promise<PipedriveField[]> {
   const data = await apiGet<PipedriveField[]>('/personFields');
   return data ?? [];
+}
+
+/** Retorna todas as definições de campos de negócios (deals), incluindo opções de enums. */
+export async function fetchDealFields(): Promise<PipedriveField[]> {
+  const data = await apiGet<PipedriveField[]>('/dealFields');
+  return data ?? [];
+}
+
+/**
+ * Resolve o valor de um campo enum do Pipedrive.
+ * No webhook v2, enums chegam como { id: number, type: "enum" } em vez do label.
+ * Busca o label correspondente nas definições do campo.
+ */
+export function resolveDealEnumValue(
+  rawValue: unknown,
+  dealFields: PipedriveField[],
+  fieldKey: string,
+): string | null {
+  if (!rawValue) return null;
+  if (typeof rawValue === 'string') return rawValue;
+
+  // Formato v2: { id: 31, type: "enum" }
+  if (typeof rawValue === 'object' && rawValue !== null && 'id' in rawValue) {
+    const enumId = (rawValue as { id: number }).id;
+    const field = dealFields.find((f) => f.key === fieldKey);
+    const option = field?.options?.find((o) => o.id === enumId);
+    if (option) {
+      logger.info(`Pipedrive: enum "${fieldKey}" id=${enumId} → "${option.label}"`);
+      return option.label;
+    }
+    logger.warn(`Pipedrive: enum "${fieldKey}" id=${enumId} não encontrado nos dealFields`);
+  }
+
+  return null;
 }
 
 /**

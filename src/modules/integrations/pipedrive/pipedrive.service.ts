@@ -6,7 +6,9 @@ import {
   fetchOrganization,
   fetchPerson,
   fetchOrganizationFields,
+  fetchDealFields,
   fetchPipedriveUser,
+  resolveDealEnumValue,
   extractPrimaryEmail,
   extractPrimaryPhone,
   extractAddress,
@@ -159,12 +161,13 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
     return { skipped: true, reason: 'deal já processado anteriormente' };
   }
 
-  // Busca dados enriquecidos em paralelo: org, pessoa, campos de org e owner
-  const [org, person, orgFields, ownerUser] = await Promise.all([
+  // Busca dados enriquecidos em paralelo: org, pessoa, campos de org, owner e dealFields (para resolver enums)
+  const [org, person, orgFields, ownerUser, dealFields] = await Promise.all([
     dealData.org_id ? fetchOrganization(dealData.org_id) : Promise.resolve(null),
     dealData.person_id ? fetchPerson(dealData.person_id) : Promise.resolve(null),
     fetchOrganizationFields(),
     dealData.owner_id ? fetchPipedriveUser(dealData.owner_id) : Promise.resolve(null),
+    fetchDealFields(),
   ]);
 
   const titleFallback = (dealData.title ?? '').replace(/\|.*$/, '').trim() || `Lead #${dealId}`;
@@ -205,7 +208,7 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
     pipedrivePersonId: dealData.person_id ? String(dealData.person_id) : undefined,
     pipedrivePersonRaw: person ? (person as unknown as object) : undefined,
     pipedriveOwnerName: ownerUser?.name ?? undefined,
-    tipoServico: (dealData.custom_fields?.[TIPO_SERVICO_FIELD] as string) ?? undefined,
+    tipoServico: resolveDealEnumValue(dealData.custom_fields?.[TIPO_SERVICO_FIELD], dealFields, TIPO_SERVICO_FIELD) ?? undefined,
   });
 
   logger.info(`Contrato criado para deal Pipedrive ${dealId}: "${dealData.title}" — org: ${org?.name ?? 'sem org'}, pessoa: ${person?.name ?? 'sem pessoa'}`);
@@ -295,8 +298,9 @@ async function handleMoveToSigning(dealId: string, dealData: DealData, pipedrive
 
   logger.info(`Deal ${dealId}: Assinatura do Contrato iniciada via Pipedrive (estágio ${dealData.stage_id}) por ${pipedriveUser?.name ?? pipedriveUserId ?? 'desconhecido'}`);
 
-  // Garante que tipoServico está salvo no deal (pode ter vindo apenas no webhook do estágio 57)
-  const tipoServico = dealData.custom_fields?.[TIPO_SERVICO_FIELD] as string | null ?? null;
+  // Resolve o enum do Pipedrive (vem como { id, type } no v2) para o label legível
+  const dealFieldsForSigning = await fetchDealFields();
+  const tipoServico = resolveDealEnumValue(dealData.custom_fields?.[TIPO_SERVICO_FIELD], dealFieldsForSigning, TIPO_SERVICO_FIELD);
   if (tipoServico && !(existingDeal as any).tipoServico) {
     await prisma.pipedriveDeal.update({
       where: { id: existingDeal.id },
