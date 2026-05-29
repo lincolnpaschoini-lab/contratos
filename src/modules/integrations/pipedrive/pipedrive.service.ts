@@ -117,19 +117,25 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
     return { skipped: true, reason: 'sem deal ID no payload' };
   }
 
-  const targetStageId = env.PIPEDRIVE_PROPOSAL_ACCEPTED_STAGE_ID;
   const currentStageId = String(dealData.stage_id ?? '');
   const previousStageId = String(payload.previous?.stage_id ?? '');
+  const proposalStageId = env.PIPEDRIVE_PROPOSAL_ACCEPTED_STAGE_ID;
+  const prepStageId = env.PIPEDRIVE_CONTRACT_PREPARATION_STAGE_ID;
 
-  logger.info(`Pipedrive deal ${dealId}: stage ${previousStageId} → ${currentStageId} (alvo: ${targetStageId || 'nome'})`);
+  logger.info(`Pipedrive deal ${dealId}: stage ${previousStageId} → ${currentStageId}`);
 
-  // Verifica se entrou no estágio alvo
-  const isProposalAccepted = targetStageId
-    ? currentStageId === targetStageId && previousStageId !== targetStageId
+  // ── Estágio "Preparação do Contrato" (56): avança contrato existente ──────
+  if (prepStageId && currentStageId === prepStageId && previousStageId !== prepStageId) {
+    return handleMoveToPreparation(dealId, dealData);
+  }
+
+  // ── Estágio "Proposta Aceita" (55): cria novo contrato ───────────────────
+  const isProposalAccepted = proposalStageId
+    ? currentStageId === proposalStageId && previousStageId !== proposalStageId
     : (dealData.stage_name?.toLowerCase().includes('proposta aceita') ?? false);
 
   if (!isProposalAccepted) {
-    return { skipped: true, reason: `estágio ${currentStageId} não é o alvo (${targetStageId || 'proposta aceita'})` };
+    return { skipped: true, reason: `estágio ${currentStageId} não mapeado` };
   }
 
   // Verifica duplicidade
@@ -187,6 +193,38 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
 
   logger.info(`Contrato criado para deal Pipedrive ${dealId}: "${dealData.title}" — org: ${org?.name ?? 'sem org'}, pessoa: ${person?.name ?? 'sem pessoa'}`);
   return { created: true, externalDealId: dealId };
+}
+
+async function handleMoveToPreparation(dealId: string, dealData: DealData) {
+  const existingDeal = await prisma.pipedriveDeal.findUnique({
+    where: { externalDealId: dealId },
+    include: { contractTracking: { include: { steps: true } } },
+  });
+
+  if (!existingDeal?.contractTracking) {
+    logger.warn(`Pipedrive: deal ${dealId} movido para Preparação mas não tem tracking no sistema`);
+    return { skipped: true, reason: 'deal não possui contrato no sistema' };
+  }
+
+  const tracking = existingDeal.contractTracking;
+  const { StepStatus } = await import('@prisma/client');
+  const { startStep } = await import('../../contracts/contracts.service');
+
+  const prepStep = tracking.steps.find((s) => s.stepName === 'CONTRACT_PREPARATION');
+  if (!prepStep) {
+    return { skipped: true, reason: 'etapa de preparação não encontrada' };
+  }
+
+  if (prepStep.status !== StepStatus.PENDING) {
+    logger.info(`Deal ${dealId}: Preparação já foi iniciada (status: ${prepStep.status})`);
+    return { skipped: true, reason: `preparação já em status ${prepStep.status}` };
+  }
+
+  // Inicia a etapa de preparação (como se o usuário tivesse clicado "Iniciar Etapa")
+  await startStep(tracking.id, prepStep.id, 'system-pipedrive');
+  logger.info(`Deal ${dealId}: Preparação do Contrato iniciada via Pipedrive (estágio ${dealData.stage_id})`);
+
+  return { advanced: true, trackingId: tracking.id, step: 'CONTRACT_PREPARATION' };
 }
 
 export function verifyPipedriveSignature(rawBody: string, signature: string): boolean {

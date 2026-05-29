@@ -293,7 +293,7 @@ export async function getContractDetail(id: string) {
 
 // ─── Atualização de etapas ────────────────────────────────────────────────────
 
-export async function startStep(trackingId: string, stepId: string, userId: string) {
+export async function startStep(trackingId: string, stepId: string, userId: string | null) {
   const step = await findStepById(stepId);
   if (!step || step.contractTrackingId !== trackingId) {
     throw new AppError('Etapa não encontrada.', 404);
@@ -323,8 +323,10 @@ export async function startStep(trackingId: string, stepId: string, userId: stri
     contractStepId: stepId,
     fromStatus: step.status,
     toStatus: StepStatus.IN_PROGRESS,
-    changedByUserId: userId,
-    changeReason: 'Etapa iniciada manualmente',
+    changedByUserId: userId !== 'system-pipedrive' ? userId : null,
+    changeReason: userId === 'system-pipedrive'
+      ? 'Etapa iniciada via mudança de estágio no Pipedrive'
+      : 'Etapa iniciada manualmente',
   });
 
   await updateStep(stepId, {
@@ -507,11 +509,14 @@ export async function recalculateOverallStatus(trackingId: string) {
     newStatus = ContractStatus.IN_PROGRESS;
   }
 
-  // Deriva o currentStep correto: primeira etapa não concluída (em ordem)
-  const firstActiveStep = freshSteps.find((s) => s.status !== StepStatus.COMPLETED);
-  const correctCurrentStep = firstActiveStep
-    ? firstActiveStep.stepName
-    : freshSteps[freshSteps.length - 1].stepName;
+  // currentStep = primeira etapa IN_PROGRESS ou DELAYED (não PENDING)
+  // Se nenhuma está em andamento, fica na última etapa COMPLETED
+  const firstInProgress = freshSteps.find(
+    (s) => s.status === StepStatus.IN_PROGRESS || s.status === StepStatus.DELAYED,
+  );
+  const lastCompleted = [...freshSteps].reverse().find((s) => s.status === StepStatus.COMPLETED);
+  const correctCurrentStep =
+    firstInProgress?.stepName ?? lastCompleted?.stepName ?? freshSteps[0].stepName;
 
   const updates: Parameters<typeof updateTrackingStatus>[1] = {};
   if (newStatus !== tracking.overallStatus) updates.overallStatus = newStatus;
