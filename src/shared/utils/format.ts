@@ -1,21 +1,38 @@
-import { format, formatDistance, parseISO } from 'date-fns';
+import { formatDistance, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ContractStatus, StepName, StepStatus } from '@prisma/client';
 
-export function formatDate(date: Date | string | null | undefined, pattern = 'dd/MM/yyyy'): string {
+const TIMEZONE = 'America/Sao_Paulo';
+
+function toDate(date: Date | string): Date {
+  return typeof date === 'string' ? parseISO(date) : date;
+}
+
+export function formatDate(date: Date | string | null | undefined): string {
   if (!date) return '-';
-  const d = typeof date === 'string' ? parseISO(date) : date;
-  return format(d, pattern, { locale: ptBR });
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: TIMEZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(toDate(date));
 }
 
 export function formatDateTime(date: Date | string | null | undefined): string {
-  return formatDate(date, 'dd/MM/yyyy HH:mm');
+  if (!date) return '-';
+  return new Intl.DateTimeFormat('pt-BR', {
+    timeZone: TIMEZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(toDate(date));
 }
 
 export function formatRelative(date: Date | string | null | undefined): string {
   if (!date) return '-';
-  const d = typeof date === 'string' ? parseISO(date) : date;
-  return formatDistance(d, new Date(), { addSuffix: true, locale: ptBR });
+  return formatDistance(toDate(date), new Date(), { addSuffix: true, locale: ptBR });
 }
 
 export function formatCurrency(value: number | string | null | undefined): string {
