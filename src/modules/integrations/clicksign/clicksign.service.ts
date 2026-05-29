@@ -57,7 +57,8 @@ export async function sendContractToClicksign(params: {
   console.log(`[CLICKSIGN] Envelope criado: ${envelopeId}`);
 
   // 2 — Adicionar documento do template
-  const documentId = await addDocumentFromTemplate(envelopeId, templateKey);
+  const filename = `${tipoServico} - ${customerName}.pdf`.replace(/[^a-zA-Z0-9\s\-_.]/g, '');
+  const documentId = await addDocumentFromTemplate(envelopeId, templateKey, filename);
   console.log(`[CLICKSIGN] Documento adicionado: ${documentId}`);
 
   // 3 — Adicionar signatários (internos + cliente)
