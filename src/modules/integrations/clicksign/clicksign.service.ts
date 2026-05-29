@@ -57,7 +57,7 @@ export async function sendContractToClicksign(params: {
   console.log(`[CLICKSIGN] Envelope criado: ${envelopeId}`);
 
   // 2 — Adicionar documento do template
-  const filename = `contrato_${Date.now()}.pdf`;
+  const filename = `contrato_${Date.now()}.docx`;
   const documentId = await addDocumentFromTemplate(envelopeId, templateKey, filename);
   console.log(`[CLICKSIGN] Documento adicionado: ${documentId}`);
 
