@@ -112,19 +112,28 @@ export async function addSigner(envelopeId: string, signer: ClicksignSigner): Pr
   return res.data.id;
 }
 
-/** Cria um requisito de assinatura vinculando signatário a documento via email. */
+/** Cria os dois requisitos necessários por signatário: autenticação (email) + assinatura (agree). */
 export async function addRequirement(envelopeId: string, documentId: string, signerId: string): Promise<void> {
+  const relationships = {
+    document: { data: { type: 'documents', id: documentId } },
+    signer: { data: { type: 'signers', id: signerId } },
+  };
+
+  // 1 — Requisito de autenticação via email
   await apiCall('POST', `/envelopes/${envelopeId}/requirements`, {
     data: {
       type: 'requirements',
-      attributes: {
-        action: 'provide_evidence',
-        auth: 'email',
-      },
-      relationships: {
-        document: { data: { type: 'documents', id: documentId } },
-        signer: { data: { type: 'signers', id: signerId } },
-      },
+      attributes: { action: 'provide_evidence', auth: 'email' },
+      relationships,
+    },
+  });
+
+  // 2 — Requisito de assinatura (obrigatório para ativação do envelope)
+  await apiCall('POST', `/envelopes/${envelopeId}/requirements`, {
+    data: {
+      type: 'requirements',
+      attributes: { action: 'agree', role: 'sign' },
+      relationships,
     },
   });
 }
