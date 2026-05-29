@@ -14,6 +14,9 @@ import {
   detectDocument,
 } from './pipedrive.api';
 
+// API key do campo customizado "tipo_servico" no Pipedrive
+const TIPO_SERVICO_FIELD = 'b9e2317c3051565d2ad79d04ce9d8b9143ac1fc8';
+
 // Suporta formato v1 (event + current) e v2 (meta.action + data)
 export interface PipedriveWebhookPayload {
   // v1
@@ -202,6 +205,7 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
     pipedrivePersonId: dealData.person_id ? String(dealData.person_id) : undefined,
     pipedrivePersonRaw: person ? (person as unknown as object) : undefined,
     pipedriveOwnerName: ownerUser?.name ?? undefined,
+    tipoServico: (dealData.custom_fields?.[TIPO_SERVICO_FIELD] as string) ?? undefined,
   });
 
   logger.info(`Contrato criado para deal Pipedrive ${dealId}: "${dealData.title}" — org: ${org?.name ?? 'sem org'}, pessoa: ${person?.name ?? 'sem pessoa'}`);
@@ -241,8 +245,6 @@ async function handleMoveToPreparation(dealId: string, dealData: DealData, piped
 
   return { advanced: true, trackingId: tracking.id, step: 'CONTRACT_PREPARATION' };
 }
-
-const TIPO_SERVICO_FIELD = 'b9e2317c3051565d2ad79d04ce9d8b9143ac1fc8';
 
 async function handleMoveToSigning(dealId: string, dealData: DealData, pipedriveUserId?: string | number) {
   const existingDeal = await prisma.pipedriveDeal.findUnique({
@@ -293,11 +295,19 @@ async function handleMoveToSigning(dealId: string, dealData: DealData, pipedrive
 
   logger.info(`Deal ${dealId}: Assinatura do Contrato iniciada via Pipedrive (estágio ${dealData.stage_id}) por ${pipedriveUser?.name ?? pipedriveUserId ?? 'desconhecido'}`);
 
+  // Garante que tipoServico está salvo no deal (pode ter vindo apenas no webhook do estágio 57)
+  const tipoServico = dealData.custom_fields?.[TIPO_SERVICO_FIELD] as string | null ?? null;
+  if (tipoServico && !(existingDeal as any).tipoServico) {
+    await prisma.pipedriveDeal.update({
+      where: { id: existingDeal.id },
+      data: { tipoServico } as any,
+    });
+  }
+
   // Envia contrato para assinatura no Clicksign
   const customer = (existingDeal.contractTracking as any).customer;
   const customerEmail = customer?.contactEmail ?? customer?.email ?? null;
   const customerName = customer?.name ?? 'Cliente';
-  const tipoServico = dealData.custom_fields?.[TIPO_SERVICO_FIELD] as string | null ?? null;
 
   if (customerEmail) {
     const { sendContractToClicksign } = await import('../clicksign/clicksign.service');

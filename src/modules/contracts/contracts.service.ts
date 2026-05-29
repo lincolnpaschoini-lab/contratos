@@ -57,6 +57,7 @@ export async function createContractFromDeal(params: {
   pipedriveOrgRaw?: object;
   pipedrivePersonRaw?: object;
   pipedriveOwnerName?: string;
+  tipoServico?: string;
   rawPayload?: object;
   proposalAcceptedAt?: Date;
 }) {
@@ -114,9 +115,10 @@ export async function createContractFromDeal(params: {
       currency: params.currency,
       stageName: params.stageName,
       stageId: params.stageId,
+      tipoServico: params.tipoServico ?? null,
       customerId: customer.id,
       rawPayload: params.rawPayload ?? {},
-    },
+    } as any,
   });
 
   // Prepara as etapas — Preparação começa PENDING para aparecer em "Proposta Aceita" no pipeline
