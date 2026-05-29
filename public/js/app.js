@@ -93,8 +93,8 @@ function showNewContractBanner(customerName, trackingId) {
    TEMPO REAL — Polling + SSE híbrido
    ═══════════════════════════════════════════════════════════════════ */
 
-const POLL_INTERVAL_DASHBOARD = 20000;  // 20s
-const POLL_INTERVAL_WEBHOOKS  = 15000;  // 15s
+const POLL_INTERVAL_DASHBOARD = 5000;   // 5s
+const POLL_INTERVAL_WEBHOOKS  = 5000;   // 5s
 
 /* ── Dashboard: polling do pipeline ────────────────────────────────── */
 (function initDashboardPolling() {
