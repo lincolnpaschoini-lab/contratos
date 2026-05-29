@@ -58,6 +58,26 @@ model Customer {
   email     String?
   phone     String?
 
+  // Endereço (vindo da organização do Pipedrive)
+  address   String?
+  city      String?
+  state     String?
+  zipCode   String? @map("zip_code")
+  country   String?
+
+  // Contato responsável (vindo da pessoa do Pipedrive)
+  contactName  String? @map("contact_name")
+  contactEmail String? @map("contact_email")
+  contactPhone String? @map("contact_phone")
+
+  // IDs externos para re-consulta futura
+  pipedriveOrgId    String? @map("pipedrive_org_id")
+  pipedrivePersonId String? @map("pipedrive_person_id")
+
+  // Campos customizados brutos (para mapeamento futuro de CNPJ, etc.)
+  pipedriveOrgRaw    Json? @map("pipedrive_org_raw")
+  pipedrivePersonRaw Json? @map("pipedrive_person_raw")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 

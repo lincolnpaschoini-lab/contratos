@@ -2,6 +2,12 @@ import { prisma } from '../../../config/database';
 import { createContractFromDeal } from '../../contracts/contracts.service';
 import { logger } from '../../../config/logger';
 import { env } from '../../../config/env';
+import {
+  fetchOrganization,
+  fetchPerson,
+  extractPrimaryEmail,
+  extractPrimaryPhone,
+} from './pipedrive.api';
 
 // Suporta formato v1 (event + current) e v2 (meta.action + data)
 export interface PipedriveWebhookPayload {
@@ -129,18 +135,15 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
     return { skipped: true, reason: 'deal já processado anteriormente' };
   }
 
-  // Busca nome do cliente — org tem prioridade sobre person
-  let customerName = `Lead #${dealId}`;
-  if (dealData.org_id) {
-    try {
-      // Tenta buscar nome da organização via API se token disponível
-      customerName = await fetchOrgName(dealData.org_id) ?? customerName;
-    } catch { /* usa fallback */ }
-  }
-  // Se não resolveu, usa o título do deal
-  if (customerName === `Lead #${dealId}`) {
-    customerName = (dealData.title ?? customerName).replace(/\|.*$/, '').trim() || customerName;
-  }
+  // Busca dados enriquecidos da organização e da pessoa em paralelo
+  const [org, person] = await Promise.all([
+    dealData.org_id ? fetchOrganization(dealData.org_id) : Promise.resolve(null),
+    dealData.person_id ? fetchPerson(dealData.person_id) : Promise.resolve(null),
+  ]);
+
+  // Nome do cliente: organização > título do deal
+  const titleFallback = (dealData.title ?? '').replace(/\|.*$/, '').trim() || `Lead #${dealId}`;
+  const customerName = org?.name ?? titleFallback;
 
   await createContractFromDeal({
     externalDealId: dealId,
@@ -149,27 +152,31 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
     currency: dealData.currency ?? 'BRL',
     stageName: dealData.stage_name ?? 'Proposta aceita',
     stageId: currentStageId,
-    customerName,
     rawPayload: payload as object,
     proposalAcceptedAt: new Date(),
+
+    // Dados da organização
+    customerName,
+    customerEmail: extractPrimaryEmail(org?.email as any) ?? undefined,
+    customerPhone: org?.phone ?? undefined,
+    customerAddress: org?.address_formatted_address ?? org?.address ?? undefined,
+    customerCity: org?.address_locality ?? undefined,
+    customerState: org?.address_admin_area_level_1 ?? undefined,
+    customerZipCode: org?.address_postal_code ?? undefined,
+    customerCountry: org?.address_country ?? undefined,
+    pipedriveOrgId: dealData.org_id ? String(dealData.org_id) : undefined,
+    pipedriveOrgRaw: org ? (org as unknown as object) : undefined,
+
+    // Dados do contato / pessoa responsável
+    contactName: person?.name ?? undefined,
+    contactEmail: extractPrimaryEmail(person?.email) ?? undefined,
+    contactPhone: extractPrimaryPhone(person?.phone) ?? undefined,
+    pipedrivePersonId: dealData.person_id ? String(dealData.person_id) : undefined,
+    pipedrivePersonRaw: person ? (person as unknown as object) : undefined,
   });
 
-  logger.info(`Contrato criado para deal Pipedrive ${dealId}: "${dealData.title}"`);
+  logger.info(`Contrato criado para deal Pipedrive ${dealId}: "${dealData.title}" — org: ${org?.name ?? 'sem org'}, pessoa: ${person?.name ?? 'sem pessoa'}`);
   return { created: true, externalDealId: dealId };
-}
-
-async function fetchOrgName(orgId: number | string): Promise<string | null> {
-  if (!env.PIPEDRIVE_API_TOKEN || !env.PIPEDRIVE_DOMAIN) return null;
-  try {
-    const res = await fetch(
-      `https://${env.PIPEDRIVE_DOMAIN}/api/v2/organizations/${orgId}?api_token=${env.PIPEDRIVE_API_TOKEN}`,
-    );
-    if (!res.ok) return null;
-    const json = (await res.json()) as any;
-    return json?.data?.name ?? null;
-  } catch {
-    return null;
-  }
 }
 
 export function verifyPipedriveSignature(rawBody: string, signature: string): boolean {

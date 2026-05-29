@@ -42,36 +42,120 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
 
 <!-- Info cards -->
 <div class="row g-3 mb-4 mt-2">
-  <div class="col-6 col-lg-3">
-    <div class="info-card">
-      <div class="info-label">Responsável</div>
-      <div class="info-value"><%= contract.assignedUser?.name || '—' %></div>
-    </div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="info-card">
-      <div class="info-label">Proposta Aceita em</div>
-      <div class="info-value"><%= h.formatDate(contract.proposalAcceptedAt) %></div>
-    </div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="info-card">
-      <div class="info-label">Origem (Pipedrive)</div>
-      <div class="info-value small"><%= contract.pipedriveDeal.externalDealId %></div>
-    </div>
-  </div>
-  <div class="col-6 col-lg-3">
-    <div class="info-card">
-      <div class="info-label"><%= contract.overallStatus === 'COMPLETED' ? 'Concluído em' : 'Etapa Atual' %></div>
-      <div class="info-value">
-        <% if (contract.overallStatus === 'COMPLETED') { %>
-          <%= h.formatDate(contract.completedAt) %>
-        <% } else { %>
-          <%= h.STEP_LABELS[contract.currentStep] %>
+
+  <!-- Dados do cliente/organização -->
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-building me-2"></i>Dados da Empresa</span>
+        <% if (contract.customer.pipedriveOrgId) { %>
+        <span class="badge bg-light text-dark border small">
+          <i class="bi bi-diagram-3 me-1"></i>Org ID: <%= contract.customer.pipedriveOrgId %>
+        </span>
         <% } %>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-12 col-md-4">
+            <div class="small text-muted">Razão Social</div>
+            <div class="fw-semibold"><%= contract.customer.name %></div>
+          </div>
+          <% if (contract.customer.document) { %>
+          <div class="col-12 col-md-4">
+            <div class="small text-muted">CNPJ / CPF</div>
+            <div class="fw-semibold"><%= contract.customer.document %></div>
+          </div>
+          <% } %>
+          <% if (contract.customer.email) { %>
+          <div class="col-12 col-md-4">
+            <div class="small text-muted">E-mail</div>
+            <div><a href="mailto:<%= contract.customer.email %>"><%= contract.customer.email %></a></div>
+          </div>
+          <% } %>
+          <% if (contract.customer.phone) { %>
+          <div class="col-12 col-md-4">
+            <div class="small text-muted">Telefone</div>
+            <div><%= contract.customer.phone %></div>
+          </div>
+          <% } %>
+          <% if (contract.customer.address || contract.customer.city) { %>
+          <div class="col-12 col-md-8">
+            <div class="small text-muted">Endereço</div>
+            <div>
+              <%= contract.customer.address || '' %>
+              <% if (contract.customer.city) { %><span class="text-muted"> — <%= contract.customer.city %><% if (contract.customer.state) { %>/<%= contract.customer.state %><% } %></span><% } %>
+              <% if (contract.customer.zipCode) { %><span class="text-muted"> CEP: <%= contract.customer.zipCode %></span><% } %>
+            </div>
+          </div>
+          <% } %>
+        </div>
       </div>
     </div>
   </div>
+
+  <!-- Dados do contato responsável -->
+  <% if (contract.customer.contactName || contract.customer.contactEmail) { %>
+  <div class="col-12 col-md-6">
+    <div class="card h-100">
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <span><i class="bi bi-person me-2"></i>Contato Responsável</span>
+        <% if (contract.customer.pipedrivePersonId) { %>
+        <span class="badge bg-light text-dark border small">ID: <%= contract.customer.pipedrivePersonId %></span>
+        <% } %>
+      </div>
+      <div class="card-body">
+        <div class="row g-2">
+          <% if (contract.customer.contactName) { %>
+          <div class="col-12">
+            <div class="small text-muted">Nome</div>
+            <div class="fw-semibold"><%= contract.customer.contactName %></div>
+          </div>
+          <% } %>
+          <% if (contract.customer.contactEmail) { %>
+          <div class="col-12">
+            <div class="small text-muted">E-mail</div>
+            <div><a href="mailto:<%= contract.customer.contactEmail %>"><%= contract.customer.contactEmail %></a></div>
+          </div>
+          <% } %>
+          <% if (contract.customer.contactPhone) { %>
+          <div class="col-12">
+            <div class="small text-muted">Telefone</div>
+            <div><%= contract.customer.contactPhone %></div>
+          </div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+  <% } %>
+
+  <!-- Info contrato -->
+  <div class="col-12 col-md-<%= (contract.customer.contactName || contract.customer.contactEmail) ? '6' : '12' %>">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-file-earmark-text me-2"></i>Dados do Contrato</div>
+      <div class="card-body">
+        <div class="row g-2">
+          <div class="col-6">
+            <div class="small text-muted">Responsável interno</div>
+            <div class="fw-semibold"><%= contract.assignedUser?.name || '—' %></div>
+          </div>
+          <div class="col-6">
+            <div class="small text-muted">Proposta aceita em</div>
+            <div class="fw-semibold"><%= h.formatDate(contract.proposalAcceptedAt) %></div>
+          </div>
+          <div class="col-6">
+            <div class="small text-muted">Deal Pipedrive</div>
+            <div class="fw-semibold small"><%= contract.pipedriveDeal.externalDealId %></div>
+          </div>
+          <div class="col-6">
+            <div class="small text-muted">Valor</div>
+            <div class="fw-semibold text-primary"><%= h.formatCurrency(contract.pipedriveDeal.value) %></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <!-- Timeline das etapas -->

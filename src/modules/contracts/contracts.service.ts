@@ -42,24 +42,64 @@ export async function createContractFromDeal(params: {
   customerEmail?: string;
   customerPhone?: string;
   customerDocument?: string;
+  // Dados enriquecidos da API Pipedrive
+  customerAddress?: string;
+  customerCity?: string;
+  customerState?: string;
+  customerZipCode?: string;
+  customerCountry?: string;
+  contactName?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  pipedriveOrgId?: string;
+  pipedrivePersonId?: string;
+  pipedriveOrgRaw?: object;
+  pipedrivePersonRaw?: object;
   rawPayload?: object;
   proposalAcceptedAt?: Date;
 }) {
   const now = params.proposalAcceptedAt ?? new Date();
   const slaMap = await getSlaMap();
 
-  // Upsert cliente
+  // Upsert cliente com todos os dados disponíveis
   const customer = await prisma.customer.upsert({
-    where: {
-      id: `ext-${params.externalDealId}`,
+    where: { id: `ext-${params.externalDealId}` },
+    update: {
+      name: params.customerName,
+      email: params.customerEmail ?? undefined,
+      phone: params.customerPhone ?? undefined,
+      document: params.customerDocument ?? undefined,
+      address: params.customerAddress ?? undefined,
+      city: params.customerCity ?? undefined,
+      state: params.customerState ?? undefined,
+      zipCode: params.customerZipCode ?? undefined,
+      country: params.customerCountry ?? undefined,
+      contactName: params.contactName ?? undefined,
+      contactEmail: params.contactEmail ?? undefined,
+      contactPhone: params.contactPhone ?? undefined,
+      pipedriveOrgId: params.pipedriveOrgId ?? undefined,
+      pipedrivePersonId: params.pipedrivePersonId ?? undefined,
+      pipedriveOrgRaw: params.pipedriveOrgRaw ?? undefined,
+      pipedrivePersonRaw: params.pipedrivePersonRaw ?? undefined,
     },
-    update: {},
     create: {
       id: `ext-${params.externalDealId}`,
       name: params.customerName,
       email: params.customerEmail,
       phone: params.customerPhone,
       document: params.customerDocument,
+      address: params.customerAddress,
+      city: params.customerCity,
+      state: params.customerState,
+      zipCode: params.customerZipCode,
+      country: params.customerCountry,
+      contactName: params.contactName,
+      contactEmail: params.contactEmail,
+      contactPhone: params.contactPhone,
+      pipedriveOrgId: params.pipedriveOrgId,
+      pipedrivePersonId: params.pipedrivePersonId,
+      pipedriveOrgRaw: params.pipedriveOrgRaw,
+      pipedrivePersonRaw: params.pipedrivePersonRaw,
     },
   });
 
