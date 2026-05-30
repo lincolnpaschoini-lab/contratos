@@ -199,27 +199,22 @@ export async function listEnvelopeSigners(envelopeId: string): Promise<Clicksign
     'GET', `/envelopes/${envelopeId}/signers`,
   );
 
-  // Log completo para identificar os campos reais retornados pela API
-  console.log('[CLICKSIGN SIGNERS] Resposta bruta:', JSON.stringify(res?.data?.slice(0, 2), null, 2));
-
+  // A API v3 não retorna status/signed_at diretamente nos signatários.
+  // Detectamos se assinou comparando modified vs created: diferença > 60s = assinou.
   return (res.data ?? []).map((s) => {
     const attr = s.attributes ?? {};
-    // O Clicksign v3 pode retornar status em campos diferentes — tentamos os mais comuns
-    const status = String(
-      attr.status ??
-      attr.signing_status ??
-      attr.signed_at ? 'signed' : 'pending'
-    );
-    const signed_at = attr.signed_at ? String(attr.signed_at) : null;
+    const createdAt  = attr.created  ? new Date(String(attr.created)).getTime()  : 0;
+    const modifiedAt = attr.modified ? new Date(String(attr.modified)).getTime() : 0;
+    const hasSigned  = (modifiedAt - createdAt) > 60_000;
 
-    console.log(`[CLICKSIGN SIGNERS] ${attr.email}: status="${status}", signed_at="${signed_at}", attrs disponíveis: ${Object.keys(attr).join(', ')}`);
+    console.log(`[CLICKSIGN SIGNERS] ${attr.email}: created=${attr.created} modified=${attr.modified} hasSigned=${hasSigned}`);
 
     return {
       id: s.id,
-      name: String(attr.name ?? ''),
-      email: String(attr.email ?? ''),
-      status,
-      signed_at,
+      name:      String(attr.name  ?? ''),
+      email:     String(attr.email ?? ''),
+      status:    hasSigned ? 'signed' : 'pending',
+      signed_at: hasSigned ? String(attr.modified) : null,
     };
   });
 }
