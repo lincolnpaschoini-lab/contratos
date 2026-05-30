@@ -206,6 +206,22 @@ export async function syncPipedriveData(req: Request, res: Response, _next: Next
   }
 }
 
+export async function postSendRegistrationEmail(req: Request, res: Response, _next: NextFunction) {
+  try {
+    const { sendRegistrationActionEmail } = await import('../email/email.service');
+    // Força reenvio: invalida tokens existentes antes de criar um novo
+    await prisma.actionToken.updateMany({
+      where: { trackingId: req.params.id, action: 'complete_registration', usedAt: null },
+      data: { expiresAt: new Date() },
+    });
+    await sendRegistrationActionEmail(req.params.id);
+    setFlash(res, 'success', 'E-mail de notificação de cadastro enviado com sucesso.');
+  } catch (err: any) {
+    setFlash(res, 'error', `Erro ao enviar e-mail: ${err.message}`);
+  }
+  res.redirect(`/contracts/${req.params.id}`);
+}
+
 export async function getContractStepStatus(req: Request, res: Response, _next: NextFunction) {
   const tracking = await prisma.contractTracking.findUnique({
     where: { id: req.params.id },

@@ -14,6 +14,7 @@ import {
   postSendToClicksign,
   getClicksignStatus,
   getContractStepStatus,
+  postSendRegistrationEmail,
 } from './contracts.controller';
 
 const router = Router();
@@ -33,5 +34,6 @@ router.post('/:id/clicksign-refresh', refreshClicksign);
 router.post('/:id/clicksign-send', postSendToClicksign);
 router.get('/:id/clicksign-status', getClicksignStatus);
 router.get('/:id/step-status', getContractStepStatus);
+router.post('/:id/send-registration-email', postSendRegistrationEmail);
 
 export { router as contractRoutes };

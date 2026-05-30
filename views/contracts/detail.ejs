@@ -286,6 +286,13 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
               <i class="bi bi-check-lg me-1"></i>Concluir
             </button>
             <% } %>
+            <% if (step.stepName === 'CONTRACT_REGISTRATION') { %>
+            <form method="POST" action="/contracts/<%= contract.id %>/send-registration-email" class="d-inline">
+              <button type="submit" class="btn btn-sm btn-outline-primary" title="Reenvia o e-mail com o botão de confirmação de cadastro">
+                <i class="bi bi-envelope me-1"></i>Enviar E-mail
+              </button>
+            </form>
+            <% } %>
             <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse"
                     data-bs-target="#stepDetail<%= step.id %>">
               <i class="bi bi-chat-text me-1"></i>Detalhes
