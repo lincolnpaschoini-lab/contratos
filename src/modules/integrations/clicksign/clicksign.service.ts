@@ -2,7 +2,6 @@ import { prisma } from '../../../config/database';
 import { markSigningComplete } from '../../contracts/contracts.service';
 import { logger } from '../../../config/logger';
 import { env } from '../../../config/env';
-import crypto from 'crypto';
 import {
   createEnvelope,
   addDocumentFromTemplate,
@@ -50,15 +49,55 @@ export async function sendContractToClicksign(params: {
 
   console.log(`[CLICKSIGN] Template selecionado: ${templateKey}`);
 
+  // Busca dados completos do cliente para preencher variáveis do template
+  const fullTracking = await prisma.contractTracking.findUnique({
+    where: { id: trackingId },
+    include: { customer: true },
+  });
+  const c = fullTracking?.customer as any;
+  const isPF = tipoServico?.includes('PF') ?? false;
+
+  // Mapeamento das variáveis do template Clicksign com os dados do contrato
+  // Os nomes das variáveis devem corresponder exatamente ao que está definido no template
+  const templateData: Record<string, string> = {
+    // ─── Dados pessoais (Continuado PF) ──────────────────────────
+    'Nome':           isPF ? (c?.contactName ?? c?.name ?? '') : (c?.name ?? ''),
+    'CPF':            isPF ? (c?.document ?? '') : '',
+    'E-mail':         isPF ? (c?.contactEmail ?? c?.email ?? '') : (c?.email ?? c?.contactEmail ?? ''),
+    'Telefone':       c?.contactPhone ?? c?.phone ?? '',
+    'Celular':        c?.contactPhone ?? c?.phone ?? '',
+    'WhatsApp':       c?.contactPhone ?? c?.phone ?? '',
+    // Campos não disponíveis no sistema — ficam em branco para preenchimento manual
+    'RG':             '',
+    'Data_expedição': '',
+    'Data_Nascimento':'',
+    'Estado_Civil':   '',
+    'Nacionalidade':  '',
+    'Profissão':      '',
+    // ─── Dados da empresa (Continuado PJ) ────────────────────────
+    'Razão_Social':   !isPF ? (c?.name ?? '') : '',
+    'CNPJ':           !isPF ? (c?.document ?? '') : '',
+    // ─── Endereço (comum a PF e PJ) ──────────────────────────────
+    'Logradouro':     c?.address ?? '',
+    'Número':         '',
+    'Complemento':    '',
+    'Bairro':         '',
+    'Cidade':         c?.city ?? '',
+    'Estado':         c?.state ?? '',
+    'CEP':            c?.zipCode ?? '',
+  };
+
+  console.log(`[CLICKSIGN] Variáveis do template: ${Object.entries(templateData).filter(([,v]) => v).map(([k,v]) => `${k}=${v}`).join(', ')}`);
+
   // 1 — Criar envelope
   const envelopeName = `${tipoServico} — ${customerName}`;
   const message = `Prezado(a), segue o contrato de serviço ${tipoServico} para sua assinatura.`;
   const envelopeId = await createEnvelope(envelopeName, message);
   console.log(`[CLICKSIGN] Envelope criado: ${envelopeId}`);
 
-  // 2 — Adicionar documento do template
+  // 2 — Adicionar documento do template com variáveis preenchidas
   const filename = `contrato_${Date.now()}.docx`;
-  const documentId = await addDocumentFromTemplate(envelopeId, templateKey, filename);
+  const documentId = await addDocumentFromTemplate(envelopeId, templateKey, filename, templateData);
   console.log(`[CLICKSIGN] Documento adicionado: ${documentId}`);
 
   // 3 — Adicionar signatários (internos + cliente)

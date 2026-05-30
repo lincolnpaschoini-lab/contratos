@@ -78,8 +78,13 @@ export async function createEnvelope(name: string, message: string): Promise<str
   return res.data.id;
 }
 
-/** Adiciona um documento a partir de um template Clicksign. Retorna o document_id. */
-export async function addDocumentFromTemplate(envelopeId: string, templateKey: string, filename: string): Promise<string> {
+/** Adiciona um documento a partir de um template Clicksign preenchendo as variáveis. Retorna o document_id. */
+export async function addDocumentFromTemplate(
+  envelopeId: string,
+  templateKey: string,
+  filename: string,
+  templateData: Record<string, string> = {},
+): Promise<string> {
   const res = await apiCall<{ data: { id: string } }>('POST', `/envelopes/${envelopeId}/documents`, {
     data: {
       type: 'documents',
@@ -87,7 +92,7 @@ export async function addDocumentFromTemplate(envelopeId: string, templateKey: s
         filename,
         template: {
           key: templateKey,
-          data: {},
+          data: templateData,
         },
       },
     },
