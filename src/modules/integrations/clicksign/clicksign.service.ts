@@ -9,7 +9,9 @@ import {
   addRequirement,
   activateEnvelope,
   getEnvelope,
+  listEnvelopeSigners,
   type ClicksignSigner,
+  type ClicksignSignerDetail,
 } from './clicksign.api';
 
 // Mapeamento tipo_servico (campo Pipedrive) → chave do template no Clicksign
@@ -125,7 +127,15 @@ export async function sendContractToClicksign(params: {
   await activateEnvelope(envelopeId);
   console.log(`[CLICKSIGN] Envelope ativado (running): ${envelopeId}`);
 
-  // Salva no banco para rastreamento
+  // Salva no banco com detalhes dos signatários para exibir na tela
+  const signerDetails = allSigners.map((s, i) => ({
+    id: signerIds[i],
+    name: s.name,
+    email: s.email,
+    status: 'pending',
+    signed_at: null,
+  }));
+
   await prisma.clicksignDocument.create({
     data: {
       contractTrackingId: trackingId,
@@ -133,7 +143,7 @@ export async function sendContractToClicksign(params: {
       externalDocumentId: documentId,
       status: 'running',
       sentAt: new Date(),
-      rawPayload: { envelopeId, documentId, signerIds, templateKey } as any,
+      rawPayload: { envelopeId, documentId, signers: signerDetails, templateKey } as any,
     },
   });
 
@@ -170,10 +180,11 @@ export async function sendContractToClicksignManual(trackingId: string): Promise
   });
 }
 
-/** Consulta o status atual do envelope no Clicksign e atualiza o banco. */
+/** Consulta o status atual do envelope + signatários no Clicksign e atualiza o banco. */
 export async function refreshClicksignStatus(trackingId: string): Promise<{
   status: string;
   envelopeId: string;
+  signers: ClicksignSignerDetail[];
 } | null> {
   const doc = await prisma.clicksignDocument.findFirst({
     where: { contractTrackingId: trackingId },
@@ -182,73 +193,65 @@ export async function refreshClicksignStatus(trackingId: string): Promise<{
 
   if (!doc?.externalEnvelopeId) return null;
 
-  const envelope = await getEnvelope(doc.externalEnvelopeId);
+  const [envelope, signers] = await Promise.all([
+    getEnvelope(doc.externalEnvelopeId),
+    listEnvelopeSigners(doc.externalEnvelopeId),
+  ]);
+
   const newStatus = envelope.data.attributes.status;
+  const rawPayload = (doc.rawPayload as any) ?? {};
 
   await prisma.clicksignDocument.update({
     where: { id: doc.id },
-    data: { status: newStatus },
+    data: {
+      status: newStatus,
+      rawPayload: { ...rawPayload, signers } as any,
+    },
   });
 
-  logger.info(`Clicksign: status atualizado — envelope ${doc.externalEnvelopeId}: ${newStatus}`);
-  return { status: newStatus, envelopeId: doc.externalEnvelopeId };
+  // Se envelope fechado (todos assinaram) e ainda não foi marcado, avança o contrato
+  if (newStatus === 'closed' && !doc.signedAt) {
+    await prisma.clicksignDocument.update({
+      where: { id: doc.id },
+      data: { signedAt: new Date() },
+    });
+    await markSigningComplete(trackingId, doc.externalDocumentId ?? doc.externalEnvelopeId);
+    logger.info(`Clicksign: envelope ${doc.externalEnvelopeId} fechado — contrato avançado para Cadastro`);
+  }
+
+  logger.info(`Clicksign: status ${newStatus}, ${signers.length} signatário(s)`);
+  return { status: newStatus, envelopeId: doc.externalEnvelopeId, signers };
 }
 
 export interface ClicksignWebhookPayload {
+  // Formato v1
   event?: {
     name?: string;
     data?: {
-      document?: {
-        key?: string;
-        status?: string;
-        filename?: string;
-      };
-      signer?: {
-        key?: string;
-        email?: string;
-        name?: string;
-      };
+      document?: { key?: string; status?: string; filename?: string };
+      signer?: { key?: string; email?: string; name?: string };
+      envelope?: { key?: string; status?: string };
     };
   };
-  // Formato alternativo (envelope)
-  document?: {
-    key?: string;
-    status?: string;
+  document?: { key?: string; status?: string };
+  // Formato v3 JSON:API
+  data?: {
+    type?: string;
+    id?: string;
+    attributes?: { status?: string; [key: string]: unknown };
   };
 }
 
-const SIGNED_EVENTS = ['sign', 'document_signed', 'all_signed', 'finalized'];
-const SIGNED_STATUSES = ['signed', 'completed', 'finalized'];
+const SIGNED_EVENTS = ['sign', 'document_signed', 'all_signed', 'finalized', 'envelope_finalized'];
+const SIGNED_STATUSES = ['signed', 'completed', 'finalized', 'closed'];
+const ENVELOPE_CLOSED_STATUSES = ['closed', 'finalized'];
 
-export async function processClicksignWebhook(
-  payload: ClicksignWebhookPayload,
-  rawPayload: object,
-) {
-  const eventName = payload.event?.name ?? 'unknown';
-  const documentKey =
-    payload.event?.data?.document?.key ??
-    payload.document?.key ??
-    null;
+export async function processClicksignWebhook(payload: ClicksignWebhookPayload, rawPayload: object) {
+  const eventName = payload.event?.name ?? payload.data?.type ?? 'unknown';
+  const documentKey = payload.event?.data?.document?.key ?? payload.document?.key ?? null;
+  const envelopeKey = payload.data?.id ?? payload.event?.data?.envelope?.key ?? null;
 
-  const eventId = `clicksign-${documentKey ?? 'noid'}-${eventName}-${Date.now()}`;
-
-  // Idempotência: evita reprocessar o mesmo documento com mesmo evento
-  if (documentKey) {
-    const recent = await prisma.webhookEvent.findFirst({
-      where: {
-        source: 'clicksign',
-        eventType: eventName,
-        processed: true,
-        createdAt: { gte: new Date(Date.now() - 60000) },
-        payload: { path: ['event', 'data', 'document', 'key'], equals: documentKey },
-      },
-    });
-
-    if (recent) {
-      logger.info(`Webhook Clicksign duplicado ignorado para documento ${documentKey}`);
-      return { skipped: true, reason: 'duplicado' };
-    }
-  }
+  const eventId = `clicksign-${envelopeKey ?? documentKey ?? 'noid'}-${eventName}-${Date.now()}`;
 
   const webhookEvent = await prisma.webhookEvent.create({
     data: {
@@ -261,13 +264,11 @@ export async function processClicksignWebhook(
   });
 
   try {
-    const result = await handleClicksignEvent(payload, documentKey);
-
+    const result = await handleClicksignEvent(payload, documentKey, envelopeKey);
     await prisma.webhookEvent.update({
       where: { id: webhookEvent.id },
       data: { processed: true, processedAt: new Date() },
     });
-
     return result;
   } catch (error: any) {
     await prisma.webhookEvent.update({
@@ -281,47 +282,52 @@ export async function processClicksignWebhook(
 async function handleClicksignEvent(
   payload: ClicksignWebhookPayload,
   documentKey: string | null,
+  envelopeKey: string | null,
 ) {
   const eventName = payload.event?.name ?? '';
+  const envelopeStatus = payload.data?.attributes?.status as string | undefined;
   const documentStatus = payload.event?.data?.document?.status ?? payload.document?.status ?? '';
 
-  const isSigningComplete =
-    SIGNED_EVENTS.includes(eventName) || SIGNED_STATUSES.includes(documentStatus);
+  const isEnvelopeClosed =
+    (payload.data?.type === 'envelopes' && ENVELOPE_CLOSED_STATUSES.includes(envelopeStatus ?? '')) ||
+    SIGNED_EVENTS.includes(eventName);
 
-  if (!isSigningComplete || !documentKey) {
-    return { skipped: true, reason: `evento ${eventName} não é de conclusão de assinatura` };
+  const isSigningComplete = isEnvelopeClosed || SIGNED_STATUSES.includes(documentStatus);
+
+  console.log(`[CLICKSIGN WEBHOOK] evento="${eventName}" envelopeKey="${envelopeKey}" docKey="${documentKey}" status="${envelopeStatus ?? documentStatus}"`);
+
+  if (!isSigningComplete) {
+    return { skipped: true, reason: `evento "${eventName}" não é de conclusão` };
   }
 
-  // Busca o documento no banco pelo identificador externo
-  const doc = await prisma.clicksignDocument.findUnique({
-    where: { externalDocumentId: documentKey },
-  });
+  // Busca o ClicksignDocument — tenta por envelope ID (v3) ou document key (v1)
+  let doc = envelopeKey
+    ? await prisma.clicksignDocument.findFirst({ where: { externalEnvelopeId: envelopeKey } })
+    : null;
+
+  if (!doc && documentKey) {
+    doc = await prisma.clicksignDocument.findUnique({ where: { externalDocumentId: documentKey } });
+  }
 
   if (!doc) {
-    logger.warn(`Documento Clicksign ${documentKey} não encontrado no sistema`);
-    return { skipped: true, reason: 'documento não encontrado' };
+    logger.warn(`Clicksign webhook: envelope/doc não encontrado (envelope: ${envelopeKey}, doc: ${documentKey})`);
+    return { skipped: true, reason: 'documento não encontrado no sistema' };
   }
 
   if (doc.signedAt) {
-    logger.info(`Documento ${documentKey} já estava marcado como assinado`);
-    return { skipped: true, reason: 'já assinado' };
+    return { skipped: true, reason: 'já processado' };
   }
 
-  // Marca o documento como assinado
   await prisma.clicksignDocument.update({
     where: { id: doc.id },
-    data: {
-      status: 'signed',
-      signedAt: new Date(),
-      rawPayload: payload as any,
-    },
+    data: { status: 'closed', signedAt: new Date() },
   });
 
-  // Atualiza a etapa de assinatura no contrato
-  await markSigningComplete(doc.contractTrackingId, documentKey);
+  await markSigningComplete(doc.contractTrackingId, doc.externalDocumentId ?? doc.externalEnvelopeId ?? '');
 
-  logger.info(`Assinatura Clicksign processada: documento ${documentKey}, tracking ${doc.contractTrackingId}`);
-  return { processed: true, documentKey, trackingId: doc.contractTrackingId };
+  console.log(`[CLICKSIGN WEBHOOK] Assinatura concluída — tracking ${doc.contractTrackingId}`);
+  logger.info(`Clicksign: assinatura concluída — tracking ${doc.contractTrackingId}`);
+  return { processed: true, trackingId: doc.contractTrackingId };
 }
 
 export function verifyClicksignToken(token: string | undefined): boolean {

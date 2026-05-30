@@ -158,3 +158,25 @@ export async function activateEnvelope(envelopeId: string): Promise<void> {
 export async function getEnvelope(envelopeId: string): Promise<ClicksignEnvelope> {
   return apiCall<ClicksignEnvelope>('GET', `/envelopes/${envelopeId}`);
 }
+
+export interface ClicksignSignerDetail {
+  id: string;
+  name: string;
+  email: string;
+  status: string;        // ex: "pending", "completed", "signed"
+  signed_at: string | null;
+}
+
+/** Lista os signatários de um envelope com seu status de assinatura. */
+export async function listEnvelopeSigners(envelopeId: string): Promise<ClicksignSignerDetail[]> {
+  const res = await apiCall<{ data: Array<{ id: string; attributes: Record<string, unknown> }> }>(
+    'GET', `/envelopes/${envelopeId}/signers`,
+  );
+  return (res.data ?? []).map((s) => ({
+    id: s.id,
+    name: String(s.attributes?.name ?? ''),
+    email: String(s.attributes?.email ?? ''),
+    status: String(s.attributes?.status ?? 'pending'),
+    signed_at: s.attributes?.signed_at ? String(s.attributes.signed_at) : null,
+  }));
+}
