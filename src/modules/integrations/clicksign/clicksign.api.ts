@@ -205,7 +205,7 @@ export async function listEnvelopeSigners(envelopeId: string): Promise<Clicksign
     const attr = s.attributes ?? {};
     const createdAt  = attr.created  ? new Date(String(attr.created)).getTime()  : 0;
     const modifiedAt = attr.modified ? new Date(String(attr.modified)).getTime() : 0;
-    const hasSigned  = (modifiedAt - createdAt) > 60_000;
+    const hasSigned  = (modifiedAt - createdAt) > 5_000; // >5s de diferença = assinou
 
     console.log(`[CLICKSIGN SIGNERS] ${attr.email}: created=${attr.created} modified=${attr.modified} hasSigned=${hasSigned}`);
 
