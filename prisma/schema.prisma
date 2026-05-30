@@ -128,6 +128,7 @@ model ContractTracking {
 
   steps         ContractStep[]
   clicksignDocs ClicksignDocument[]
+  actionTokens  ActionToken[]
 
   @@index([overallStatus])
   @@index([currentStep])
@@ -229,4 +230,21 @@ model SlaRule {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("sla_rules")
+}
+
+model ActionToken {
+  id         String    @id @default(uuid())
+  trackingId String    @map("tracking_id")
+  token      String    @unique @default(uuid())
+  action     String
+  expiresAt  DateTime  @map("expires_at")
+  usedAt     DateTime? @map("used_at")
+  metadata   Json?
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  contractTracking ContractTracking @relation(fields: [trackingId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([trackingId])
+  @@map("action_tokens")
 }

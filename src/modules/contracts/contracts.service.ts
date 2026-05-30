@@ -4,6 +4,7 @@ import { AppError } from '../../shared/middlewares/error.middleware';
 import { addBusinessDays, isOverdue } from '../../shared/utils/business-days';
 import { logger } from '../../config/logger';
 import { broadcastEvent } from '../../shared/events/sse.service';
+import { sendRegistrationActionEmail } from '../email/email.service';
 import {
   findAllTrackings,
   findTrackingById,
@@ -326,15 +327,17 @@ export async function startStep(trackingId: string, stepId: string, userId: stri
     ? addBusinessDays(new Date(), slaMap.get(step.stepName) ?? 1)
     : null;
 
+  const isSystemActor = !userId || userId.startsWith('system-');
+
   await createStepHistory({
     contractStepId: stepId,
     fromStatus: step.status,
     toStatus: StepStatus.IN_PROGRESS,
-    changedByUserId: userId !== 'system-pipedrive' ? userId : null,
+    changedByUserId: isSystemActor ? null : userId,
     changeReason: userId === 'system-pipedrive'
       ? 'Etapa iniciada via mudança de estágio no Pipedrive'
       : 'Etapa iniciada manualmente',
-    metadata: metadata ?? (userId === 'system-pipedrive' ? { source: 'pipedrive' } : null),
+    metadata: metadata ?? (isSystemActor ? { source: userId ?? 'system' } : null),
   });
 
   await updateStep(stepId, {
@@ -347,6 +350,13 @@ export async function startStep(trackingId: string, stepId: string, userId: stri
   await recalculateOverallStatus(trackingId);
 
   broadcastEvent('pipeline-updated', { trackingId, step: step.stepName });
+
+  // Dispara e-mail de notificação ao entrar em Cadastro do Contrato
+  if (step.stepName === StepName.CONTRACT_REGISTRATION) {
+    sendRegistrationActionEmail(trackingId).catch((err: Error) =>
+      logger.error(`[EMAIL] Falha ao notificar cadastro (startStep): ${err.message}`),
+    );
+  }
 }
 
 export async function completeStep(
@@ -378,13 +388,15 @@ export async function completeStep(
     if (!allDone) throw new AppError('Todas as etapas anteriores devem estar concluídas antes do faturamento.', 400);
   }
 
+  const isSystemCompleter = userId.startsWith('system-');
+
   await createStepHistory({
     contractStepId: stepId,
     fromStatus: step.status,
     toStatus: StepStatus.COMPLETED,
-    changedByUserId: userId !== 'system-pipedrive' ? userId : null,
-    changeReason: notes ?? 'Etapa concluída manualmente',
-    metadata: metadata ?? (userId === 'system-pipedrive' ? { source: 'pipedrive' } : null),
+    changedByUserId: isSystemCompleter ? null : userId,
+    changeReason: notes ?? (isSystemCompleter ? `Concluído via ${userId}` : 'Etapa concluída manualmente'),
+    metadata: metadata ?? (isSystemCompleter ? { source: userId } : null),
   });
 
   await updateStep(stepId, {
@@ -421,6 +433,13 @@ export async function completeStep(
         startedAt: new Date(),
         dueAt,
       });
+
+      // Dispara e-mail de notificação ao auto-iniciar Cadastro do Contrato
+      if (nextStepName === StepName.CONTRACT_REGISTRATION) {
+        sendRegistrationActionEmail(trackingId).catch((err: Error) =>
+          logger.error(`[EMAIL] Falha ao notificar cadastro (completeStep auto-start): ${err.message}`),
+        );
+      }
     }
 
     // Sempre avança o currentStep do tracking ao concluir uma etapa,
@@ -620,6 +639,11 @@ export async function markSigningComplete(trackingId: string, externalDocumentId
     });
 
     await updateTrackingStatus(trackingId, { currentStep: StepName.CONTRACT_REGISTRATION });
+
+    // Dispara e-mail de notificação ao iniciar Cadastro via Clicksign
+    sendRegistrationActionEmail(trackingId).catch((err: Error) =>
+      logger.error(`[EMAIL] Falha ao notificar cadastro (markSigningComplete): ${err.message}`),
+    );
   }
 
   await recalculateOverallStatus(trackingId);

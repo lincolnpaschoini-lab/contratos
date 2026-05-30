@@ -31,6 +31,7 @@ import { settingsRoutes } from './modules/settings/settings.routes';
 import { pipedriveRoutes } from './modules/integrations/pipedrive/pipedrive.routes';
 import { clicksignRoutes } from './modules/integrations/clicksign/clicksign.routes';
 import { webhookEventRoutes } from './modules/webhooks/webhooks.routes';
+import { emailActionRoutes } from './modules/email/email-action.routes';
 
 const app = express();
 
@@ -96,6 +97,9 @@ app.get('/events', requireAuth, (req, res) => {
   const clientId = uuidv4();
   addSseClient(clientId, res);
 });
+
+// Rota pública de ações por e-mail (sem autenticação, antes do rate limit padrão)
+app.use('/acoes', emailActionRoutes);
 
 app.use(defaultRateLimit);
 

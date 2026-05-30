@@ -35,6 +35,13 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(900000),
   RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(1000),
   WEBHOOK_RATE_LIMIT_MAX: z.coerce.number().default(500),
+
+  // Microsoft Graph API (envio de e-mail)
+  GRAPH_TENANT_ID: z.string().optional(),
+  GRAPH_CLIENT_ID: z.string().optional(),
+  GRAPH_CLIENT_SECRET: z.string().optional(),
+  GRAPH_SENDER_EMAIL: z.string().default('noreply@paschoini.adv.br'),
+  REGISTRATION_NOTIFY_EMAIL: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
