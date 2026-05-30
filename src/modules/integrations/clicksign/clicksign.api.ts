@@ -172,11 +172,28 @@ export async function listEnvelopeSigners(envelopeId: string): Promise<Clicksign
   const res = await apiCall<{ data: Array<{ id: string; attributes: Record<string, unknown> }> }>(
     'GET', `/envelopes/${envelopeId}/signers`,
   );
-  return (res.data ?? []).map((s) => ({
-    id: s.id,
-    name: String(s.attributes?.name ?? ''),
-    email: String(s.attributes?.email ?? ''),
-    status: String(s.attributes?.status ?? 'pending'),
-    signed_at: s.attributes?.signed_at ? String(s.attributes.signed_at) : null,
-  }));
+
+  // Log completo para identificar os campos reais retornados pela API
+  console.log('[CLICKSIGN SIGNERS] Resposta bruta:', JSON.stringify(res?.data?.slice(0, 2), null, 2));
+
+  return (res.data ?? []).map((s) => {
+    const attr = s.attributes ?? {};
+    // O Clicksign v3 pode retornar status em campos diferentes — tentamos os mais comuns
+    const status = String(
+      attr.status ??
+      attr.signing_status ??
+      attr.signed_at ? 'signed' : 'pending'
+    );
+    const signed_at = attr.signed_at ? String(attr.signed_at) : null;
+
+    console.log(`[CLICKSIGN SIGNERS] ${attr.email}: status="${status}", signed_at="${signed_at}", attrs disponíveis: ${Object.keys(attr).join(', ')}`);
+
+    return {
+      id: s.id,
+      name: String(attr.name ?? ''),
+      email: String(attr.email ?? ''),
+      status,
+      signed_at,
+    };
+  });
 }

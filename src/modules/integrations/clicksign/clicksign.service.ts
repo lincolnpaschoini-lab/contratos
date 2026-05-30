@@ -242,8 +242,10 @@ export interface ClicksignWebhookPayload {
   };
 }
 
-const SIGNED_EVENTS = ['sign', 'document_signed', 'all_signed', 'finalized', 'envelope_finalized'];
-const SIGNED_STATUSES = ['signed', 'completed', 'finalized', 'closed'];
+// Eventos que indicam conclusão TOTAL (todos assinaram)
+const COMPLETED_EVENTS = ['auto_close', 'document_closed', 'all_signed', 'finalized', 'envelope_finalized'];
+// Eventos de assinatura individual (apenas UM signatário assinou)
+const INDIVIDUAL_SIGN_EVENTS = ['sign', 'document_signed'];
 const ENVELOPE_CLOSED_STATUSES = ['closed', 'finalized'];
 
 export async function processClicksignWebhook(payload: ClicksignWebhookPayload, rawPayload: object) {
@@ -286,32 +288,49 @@ async function handleClicksignEvent(
 ) {
   const eventName = payload.event?.name ?? '';
   const envelopeStatus = payload.data?.attributes?.status as string | undefined;
-  const documentStatus = payload.event?.data?.document?.status ?? payload.document?.status ?? '';
 
-  const isEnvelopeClosed =
-    (payload.data?.type === 'envelopes' && ENVELOPE_CLOSED_STATUSES.includes(envelopeStatus ?? '')) ||
-    SIGNED_EVENTS.includes(eventName);
-
-  const isSigningComplete = isEnvelopeClosed || SIGNED_STATUSES.includes(documentStatus);
-
-  console.log(`[CLICKSIGN WEBHOOK] evento="${eventName}" envelopeKey="${envelopeKey}" docKey="${documentKey}" status="${envelopeStatus ?? documentStatus}"`);
-
-  if (!isSigningComplete) {
-    return { skipped: true, reason: `evento "${eventName}" não é de conclusão` };
-  }
+  console.log(`[CLICKSIGN WEBHOOK] evento="${eventName}" envelopeKey="${envelopeKey}" docKey="${documentKey}" status="${envelopeStatus ?? ''}"`);
 
   // Busca o ClicksignDocument — tenta por envelope ID (v3) ou document key (v1)
   let doc = envelopeKey
     ? await prisma.clicksignDocument.findFirst({ where: { externalEnvelopeId: envelopeKey } })
     : null;
-
   if (!doc && documentKey) {
     doc = await prisma.clicksignDocument.findUnique({ where: { externalDocumentId: documentKey } });
   }
-
   if (!doc) {
-    logger.warn(`Clicksign webhook: envelope/doc não encontrado (envelope: ${envelopeKey}, doc: ${documentKey})`);
+    logger.warn(`Clicksign webhook: doc não encontrado (envelope: ${envelopeKey}, doc: ${documentKey})`);
     return { skipped: true, reason: 'documento não encontrado no sistema' };
+  }
+
+  // ── Assinatura individual (sign) — atualiza o signatário no rawPayload ──────
+  if (INDIVIDUAL_SIGN_EVENTS.includes(eventName)) {
+    const signerEmail = payload.event?.data?.signer?.email ?? null;
+    console.log(`[CLICKSIGN WEBHOOK] Assinatura individual: "${signerEmail}"`);
+
+    if (signerEmail) {
+      const rawPayload = (doc.rawPayload as any) ?? {};
+      const signers: any[] = rawPayload.signers ?? [];
+      const updated = signers.map((s: any) =>
+        s.email === signerEmail
+          ? { ...s, status: 'signed', signed_at: new Date().toISOString() }
+          : s,
+      );
+      await prisma.clicksignDocument.update({
+        where: { id: doc.id },
+        data: { rawPayload: { ...rawPayload, signers: updated } as any },
+      });
+    }
+    return { processed: true, event: 'individual_sign', signer: signerEmail };
+  }
+
+  // ── Conclusão total (auto_close / document_closed) ────────────────────────
+  const isEnvelopeClosed =
+    COMPLETED_EVENTS.includes(eventName) ||
+    (payload.data?.type === 'envelopes' && ENVELOPE_CLOSED_STATUSES.includes(envelopeStatus ?? ''));
+
+  if (!isEnvelopeClosed) {
+    return { skipped: true, reason: `evento "${eventName}" não requer ação` };
   }
 
   if (doc.signedAt) {
@@ -325,9 +344,9 @@ async function handleClicksignEvent(
 
   await markSigningComplete(doc.contractTrackingId, doc.externalDocumentId ?? doc.externalEnvelopeId ?? '');
 
-  console.log(`[CLICKSIGN WEBHOOK] Assinatura concluída — tracking ${doc.contractTrackingId}`);
-  logger.info(`Clicksign: assinatura concluída — tracking ${doc.contractTrackingId}`);
-  return { processed: true, trackingId: doc.contractTrackingId };
+  console.log(`[CLICKSIGN WEBHOOK] Todos assinaram — tracking ${doc.contractTrackingId} avançado para Cadastro`);
+  logger.info(`Clicksign: todos assinaram — tracking ${doc.contractTrackingId}`);
+  return { processed: true, event: 'all_signed', trackingId: doc.contractTrackingId };
 }
 
 export function verifyClicksignToken(token: string | undefined): boolean {
