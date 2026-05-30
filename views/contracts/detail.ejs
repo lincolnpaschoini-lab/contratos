@@ -541,4 +541,77 @@ document.getElementById('modalComplete')?.addEventListener('show.bs.modal', func
   document.getElementById('formComplete').action = '/contracts/<%= contract.id %>/steps/' + stepId + '/complete';
   document.getElementById('completeStepName').textContent = stepName;
 });
+
+// ── Polling de atualizações em tempo real ───────────────────────────────────
+(function() {
+  const CONTRACT_ID = '<%= contract.id %>';
+  const INITIAL_STEP   = '<%= contract.currentStep %>';
+  const INITIAL_STATUS = '<%= contract.overallStatus %>';
+
+  // Polling de etapa/status global — recarrega a página se algo mudar
+  function pollStepStatus() {
+    fetch('/contracts/' + CONTRACT_ID + '/step-status', { headers: { Accept: 'application/json' } })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.currentStep !== INITIAL_STEP || data.overallStatus !== INITIAL_STATUS) {
+          location.reload();
+        }
+      })
+      .catch(function() {}); // silencia erros de rede
+  }
+
+  // Polling de signatários Clicksign — atualiza ícones sem recarregar
+  var csCard = document.getElementById('clicksign-card');
+  function pollClicksignStatus() {
+    fetch('/contracts/' + CONTRACT_ID + '/clicksign-status', { headers: { Accept: 'application/json' } })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.hasClicksign) return;
+
+        // Atualiza cada signatário já na tela
+        var signers = data.signers || [];
+        signers.forEach(function(signer) {
+          var row = document.querySelector('[data-signer-email="' + signer.email + '"]');
+          if (!row) return;
+          var signed = signer.status === 'signed' || signer.signed_at;
+          var icon   = row.querySelector('.signer-icon');
+          var badge  = row.querySelector('.signer-status-badge');
+          var dateEl = row.querySelector('.signer-date');
+          if (icon) {
+            icon.className = 'bi fs-5 signer-icon ' + (signed ? 'bi-check-circle-fill text-success' : 'bi-clock text-warning');
+          }
+          if (badge) {
+            badge.className = 'badge signer-status-badge ' + (signed ? 'bg-success' : 'bg-warning text-dark');
+            badge.textContent = signed ? 'Assinado' : 'Pendente';
+          }
+          if (dateEl && signer.signed_at) {
+            dateEl.textContent = signer.signed_at;
+          }
+        });
+
+        // Se o status do envelope mudou (ex: running → closed), recarrega
+        if (csCard) {
+          var wasRunning = csCard.dataset.clicksignRunning === 'true';
+          var isRunning  = data.status === 'running';
+          if (wasRunning && !isRunning) {
+            location.reload();
+          }
+        }
+      })
+      .catch(function() {});
+  }
+
+  // Inicia o polling
+  var stepInterval = setInterval(pollStepStatus, 10000);
+  var csInterval   = null;
+  if (csCard && csCard.dataset.clicksignRunning === 'true') {
+    csInterval = setInterval(pollClicksignStatus, 5000);
+  }
+
+  // Para polling ao sair da página
+  window.addEventListener('beforeunload', function() {
+    clearInterval(stepInterval);
+    if (csInterval) clearInterval(csInterval);
+  });
+})();
 </script>

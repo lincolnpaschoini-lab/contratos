@@ -206,6 +206,14 @@ export async function syncPipedriveData(req: Request, res: Response, _next: Next
   }
 }
 
+export async function getContractStepStatus(req: Request, res: Response, _next: NextFunction) {
+  const tracking = await prisma.contractTracking.findUnique({
+    where: { id: req.params.id },
+    select: { currentStep: true, overallStatus: true },
+  });
+  return res.json(tracking ?? { currentStep: null, overallStatus: null });
+}
+
 export async function getClicksignStatus(req: Request, res: Response, _next: NextFunction) {
   const doc = await prisma.clicksignDocument.findFirst({
     where: { contractTrackingId: req.params.id },

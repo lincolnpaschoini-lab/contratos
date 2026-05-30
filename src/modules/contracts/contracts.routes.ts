@@ -13,6 +13,7 @@ import {
   refreshClicksign,
   postSendToClicksign,
   getClicksignStatus,
+  getContractStepStatus,
 } from './contracts.controller';
 
 const router = Router();
@@ -31,5 +32,6 @@ router.post('/:id/sync-pipedrive', requireAdmin, syncPipedriveData);
 router.post('/:id/clicksign-refresh', refreshClicksign);
 router.post('/:id/clicksign-send', postSendToClicksign);
 router.get('/:id/clicksign-status', getClicksignStatus);
+router.get('/:id/step-status', getContractStepStatus);
 
 export { router as contractRoutes };
