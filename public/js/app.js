@@ -117,6 +117,54 @@ function showNewContractBanner(customerName, trackingId) {
   setTimeout(() => { if (div.parentNode) div.remove(); }, 12000);
 }
 
+/* ── Atualiza badges de signatários Clicksign no DOM ───────────────── */
+function updateSignerBadges(signers) {
+  if (!signers || !signers.length) return;
+  signers.forEach(function(signer) {
+    const row = document.querySelector('[data-signer-email="' + signer.email + '"]');
+    if (!row) return;
+    const signed = signer.status === 'signed' || signer.signed_at;
+    const badge = row.querySelector('.signer-status-badge');
+    const icon  = row.querySelector('.signer-icon');
+    const date  = row.querySelector('.signer-date');
+    if (badge) {
+      badge.className = 'badge signer-status-badge ' + (signed ? 'bg-success' : 'bg-warning text-dark');
+      badge.textContent = signed ? 'Assinado' : 'Pendente';
+    }
+    if (icon) {
+      icon.className = 'bi ' + (signed ? 'bi-check-circle-fill text-success' : 'bi-clock text-warning') + ' fs-5 signer-icon';
+    }
+    if (date && signer.signed_at) {
+      date.textContent = new Date(signer.signed_at).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+    }
+  });
+}
+
+/* ── Polling de status Clicksign na tela de detalhe ────────────────── */
+(function initContractClicksignPolling() {
+  const card = document.getElementById('clicksign-card');
+  if (!card || card.dataset.clicksignRunning !== 'true') return;
+  const contractId = card.dataset.contractId;
+  if (!contractId) return;
+
+  async function pollClicksignStatus() {
+    try {
+      const res = await fetch('/contracts/' + contractId + '/clicksign-status', { credentials: 'same-origin' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (!data.hasClicksign) return;
+      updateSignerBadges(data.signers);
+      if (data.status === 'closed') {
+        showToast('Todos assinaram! Avançando para Cadastro...', 'success');
+        setTimeout(() => location.reload(), 2000);
+      }
+    } catch (e) { /* silencioso */ }
+  }
+
+  setTimeout(pollClicksignStatus, 5000);
+  setInterval(pollClicksignStatus, 15000);
+})();
+
 /* ═══════════════════════════════════════════════════════════════════
    TEMPO REAL — Polling + SSE híbrido
    ═══════════════════════════════════════════════════════════════════ */
@@ -209,8 +257,28 @@ function showWebhookUpdateBanner(count) {
       } catch (err) { /* ignore */ }
     });
 
-    evtSource.addEventListener('pipeline-updated', function () {
+    evtSource.addEventListener('pipeline-updated', function (e) {
       refreshDashboard(true);
+      // Se estiver na tela de detalhe de um contrato, recarrega para mostrar novo estágio
+      if (/^\/contracts\/[a-zA-Z0-9-]+$/.test(window.location.pathname)) {
+        try {
+          const data = JSON.parse(e.data);
+          const contractId = window.location.pathname.split('/').pop();
+          if (data.trackingId === contractId) {
+            setTimeout(() => location.reload(), 800);
+          }
+        } catch { location.reload(); }
+      }
+    });
+
+    // Atualiza badges de signatários individualmente quando alguém assina
+    evtSource.addEventListener('clicksign-updated', function (e) {
+      try {
+        const data = JSON.parse(e.data);
+        const contractId = window.location.pathname.split('/').pop();
+        if (data.trackingId !== contractId) return;
+        updateSignerBadges(data.signers);
+      } catch { /* ignore */ }
     });
 
     evtSource.onerror = function () {

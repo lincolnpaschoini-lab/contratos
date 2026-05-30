@@ -206,6 +206,21 @@ export async function syncPipedriveData(req: Request, res: Response, _next: Next
   }
 }
 
+export async function getClicksignStatus(req: Request, res: Response, _next: NextFunction) {
+  const doc = await prisma.clicksignDocument.findFirst({
+    where: { contractTrackingId: req.params.id },
+    orderBy: { createdAt: 'desc' },
+  });
+  if (!doc) return res.json({ hasClicksign: false });
+  const rawPayload = (doc.rawPayload as any) ?? {};
+  return res.json({
+    hasClicksign: true,
+    status: doc.status,
+    signers: rawPayload.signers ?? [],
+    envelopeId: doc.externalEnvelopeId,
+  });
+}
+
 export async function postSendToClicksign(req: Request, res: Response, _next: NextFunction) {
   try {
     const { sendContractToClicksignManual } = await import('../integrations/clicksign/clicksign.service');

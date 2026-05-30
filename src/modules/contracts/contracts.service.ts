@@ -623,5 +623,6 @@ export async function markSigningComplete(trackingId: string, externalDocumentId
   }
 
   await recalculateOverallStatus(trackingId);
+  broadcastEvent('pipeline-updated', { trackingId, step: StepName.CONTRACT_SIGNING });
   logger.info(`Assinatura Clicksign processada para tracking ${trackingId}`);
 }

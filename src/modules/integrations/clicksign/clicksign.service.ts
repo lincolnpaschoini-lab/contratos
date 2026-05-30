@@ -324,6 +324,14 @@ async function handleClicksignEvent(
         where: { id: doc.id },
         data: { rawPayload: { ...rawPayload, signers: updated } as any },
       });
+
+      // Notifica browsers conectados para atualizar os badges de signatários
+      const { broadcastEvent } = await import('../../../shared/events/sse.service');
+      broadcastEvent('clicksign-updated', {
+        trackingId: doc.contractTrackingId,
+        signerEmail,
+        signers: updated,
+      });
     }
     return { processed: true, event: 'individual_sign', signer: signerEmail };
   }

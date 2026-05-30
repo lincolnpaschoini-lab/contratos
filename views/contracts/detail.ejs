@@ -379,7 +379,7 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
     ? clicksignBaseUrl.replace('/api/v3','').replace(/\/$/, '') + '/envelopes/' + csDoc.externalEnvelopeId
     : null;
 %>
-<div class="card mb-4">
+<div class="card mb-4" id="clicksign-card" data-clicksign-running="<%= csDoc.status === 'running' ? 'true' : 'false' %>" data-contract-id="<%= contract.id %>">
   <div class="card-header d-flex align-items-center justify-content-between">
     <span><i class="bi bi-pen me-2"></i>Assinatura Clicksign</span>
     <div class="d-flex gap-2">
@@ -427,29 +427,23 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
     <% if (signers.length > 0) { %>
     <hr class="my-3">
     <div class="small fw-semibold text-muted mb-2">Signatários</div>
-    <div class="d-flex flex-column gap-2">
+    <div class="d-flex flex-column gap-2" id="clicksign-signers">
       <% signers.forEach(function(signer) {
-        const signed = signer.status === 'completed' || signer.status === 'signed' || signer.signed_at;
+        const signed = signer.status === 'signed' || signer.signed_at;
       %>
-      <div class="d-flex align-items-center gap-2">
-        <% if (signed) { %>
-        <i class="bi bi-check-circle-fill text-success fs-5"></i>
-        <% } else { %>
-        <i class="bi bi-clock text-warning fs-5"></i>
-        <% } %>
+      <div class="d-flex align-items-center gap-2" data-signer-email="<%= signer.email %>">
+        <i class="bi <%= signed ? 'bi-check-circle-fill text-success' : 'bi-clock text-warning' %> fs-5 signer-icon"></i>
         <div>
           <div class="fw-semibold small"><%= signer.name %></div>
           <div class="text-muted" style="font-size:.8rem"><%= signer.email %></div>
         </div>
         <div class="ms-auto text-end">
-          <% if (signed) { %>
-          <span class="badge bg-success">Assinado</span>
-          <% if (signer.signed_at) { %>
-          <div class="text-muted" style="font-size:.75rem"><%= new Date(signer.signed_at).toLocaleString('pt-BR') %></div>
-          <% } %>
-          <% } else { %>
-          <span class="badge bg-warning text-dark">Pendente</span>
-          <% } %>
+          <span class="badge <%= signed ? 'bg-success' : 'bg-warning text-dark' %> signer-status-badge">
+            <%= signed ? 'Assinado' : 'Pendente' %>
+          </span>
+          <div class="text-muted signer-date" style="font-size:.75rem">
+            <%= signer.signed_at ? h.formatDateTime(signer.signed_at) : '' %>
+          </div>
         </div>
       </div>
       <% }); %>

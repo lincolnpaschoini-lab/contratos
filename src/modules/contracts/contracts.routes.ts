@@ -12,6 +12,7 @@ import {
   syncPipedriveData,
   refreshClicksign,
   postSendToClicksign,
+  getClicksignStatus,
 } from './contracts.controller';
 
 const router = Router();
@@ -29,5 +30,6 @@ router.post('/:id/delete', requireAdmin, deleteContract);
 router.post('/:id/sync-pipedrive', requireAdmin, syncPipedriveData);
 router.post('/:id/clicksign-refresh', refreshClicksign);
 router.post('/:id/clicksign-send', postSendToClicksign);
+router.get('/:id/clicksign-status', getClicksignStatus);
 
 export { router as contractRoutes };
