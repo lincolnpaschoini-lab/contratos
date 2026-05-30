@@ -10,6 +10,7 @@ import {
   activateEnvelope,
   getEnvelope,
   listEnvelopeSigners,
+  listEnvelopeRequirements,
   type ClicksignSigner,
   type ClicksignSignerDetail,
 } from './clicksign.api';
@@ -193,19 +194,44 @@ export async function refreshClicksignStatus(trackingId: string): Promise<{
 
   if (!doc?.externalEnvelopeId) return null;
 
-  const [envelope, signers] = await Promise.all([
+  const [envelope, signers, requirements] = await Promise.all([
     getEnvelope(doc.externalEnvelopeId),
     listEnvelopeSigners(doc.externalEnvelopeId),
+    listEnvelopeRequirements(doc.externalEnvelopeId),
   ]);
 
   const newStatus = envelope.data.attributes.status;
   const rawPayload = (doc.rawPayload as any) ?? {};
 
+  // Cruza signatários com requirements para determinar quem assinou
+  // Um signatário é considerado "signed" se ao menos um requirement dele está fulfilled
+  const fulfilledSignerIds = new Set(
+    requirements
+      .filter((r) => r.status === 'fulfilled' || r.fulfilledAt)
+      .map((r) => r.signerId),
+  );
+
+  const signersWithStatus: ClicksignSignerDetail[] = signers.map((s) => {
+    const fulfilled = fulfilledSignerIds.has(s.id);
+    const req = requirements.find((r) => r.signerId === s.id && (r.status === 'fulfilled' || r.fulfilledAt));
+    return {
+      ...s,
+      status: fulfilled ? 'signed' : s.status,
+      signed_at: req?.fulfilledAt ?? s.signed_at,
+    };
+  });
+
+  // Se a API de signatários não retornou status mas temos dados do rawPayload, mesclamos
+  const storedSigners: any[] = rawPayload.signers ?? [];
+  const mergedSigners = signersWithStatus.length > 0 ? signersWithStatus : storedSigners;
+
+  console.log(`[CLICKSIGN REFRESH] envelope: ${newStatus}, requirements fulfilled: ${fulfilledSignerIds.size}/${requirements.length}`);
+
   await prisma.clicksignDocument.update({
     where: { id: doc.id },
     data: {
       status: newStatus,
-      rawPayload: { ...rawPayload, signers } as any,
+      rawPayload: { ...rawPayload, signers: mergedSigners } as any,
     },
   });
 
@@ -311,8 +337,9 @@ async function handleClicksignEvent(
     if (signerEmail) {
       const rawPayload = (doc.rawPayload as any) ?? {};
       const signers: any[] = rawPayload.signers ?? [];
+      const emailLower = signerEmail.toLowerCase();
       const updated = signers.map((s: any) =>
-        s.email === signerEmail
+        (s.email ?? '').toLowerCase() === emailLower
           ? { ...s, status: 'signed', signed_at: new Date().toISOString() }
           : s,
       );

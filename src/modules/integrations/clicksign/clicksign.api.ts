@@ -167,6 +167,32 @@ export interface ClicksignSignerDetail {
   signed_at: string | null;
 }
 
+export interface ClicksignRequirement {
+  id: string;
+  signerId: string;
+  action: string;
+  status: string;
+  fulfilledAt: string | null;
+}
+
+/** Lista os requisitos do envelope (contém status de cumprimento por signatário). */
+export async function listEnvelopeRequirements(envelopeId: string): Promise<ClicksignRequirement[]> {
+  const res = await apiCall<{ data: Array<{ id: string; attributes: Record<string, unknown>; relationships?: Record<string, unknown> }> }>(
+    'GET', `/envelopes/${envelopeId}/requirements`,
+  );
+  console.log('[CLICKSIGN REQUIREMENTS] Resposta bruta:', JSON.stringify(res?.data?.slice(0, 3), null, 2));
+  return (res.data ?? []).map((r) => {
+    const rel = r.relationships as any;
+    return {
+      id: r.id,
+      signerId: String(rel?.signer?.data?.id ?? ''),
+      action: String(r.attributes?.action ?? ''),
+      status: String(r.attributes?.status ?? 'pending'),
+      fulfilledAt: r.attributes?.fulfilled_at ? String(r.attributes.fulfilled_at) : null,
+    };
+  });
+}
+
 /** Lista os signatários de um envelope com seu status de assinatura. */
 export async function listEnvelopeSigners(envelopeId: string): Promise<ClicksignSignerDetail[]> {
   const res = await apiCall<{ data: Array<{ id: string; attributes: Record<string, unknown> }> }>(

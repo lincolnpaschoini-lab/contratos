@@ -6,6 +6,14 @@ import { env } from '../../../config/env';
 export async function handleClicksignWebhook(req: Request, res: Response, next: NextFunction) {
   const correlationId = res.locals.correlationId as string;
 
+  // Log completo para diagnóstico — mostra o payload exato recebido do Clicksign
+  console.log('[CLICKSIGN WEBHOOK RECEBIDO] headers:', JSON.stringify({
+    'x-clicksign-token': req.headers['x-clicksign-token'],
+    'x-clicksign-hmac': req.headers['x-clicksign-hmac'],
+    'content-type': req.headers['content-type'],
+  }));
+  console.log('[CLICKSIGN WEBHOOK RECEBIDO] body:', JSON.stringify(req.body));
+
   logger.info('Webhook Clicksign recebido', {
     correlationId,
     event: req.body?.event?.name,
