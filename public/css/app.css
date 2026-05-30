@@ -332,6 +332,16 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; }
 .config-label { color: #495057; flex: 1; min-width: 160px; }
 .config-value { font-size: .78rem; background: #f8f9fa; padding: .2rem .4rem; border-radius: .25rem; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: inline-block; }
 
+/* ── Spinner de signatário pendente (Clicksign) ────────────────────── */
+@keyframes signer-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+.signer-spin {
+  display: inline-block;
+  animation: signer-rotate 1.4s linear infinite;
+}
+
 .btn-xs { padding: .15rem .4rem; font-size: .72rem; line-height: 1.4; }
 
 .test-result { font-size: .85rem; margin-top: .75rem; }

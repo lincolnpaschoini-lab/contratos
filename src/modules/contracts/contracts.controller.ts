@@ -215,18 +215,31 @@ export async function getContractStepStatus(req: Request, res: Response, _next: 
 }
 
 export async function getClicksignStatus(req: Request, res: Response, _next: NextFunction) {
-  const doc = await prisma.clicksignDocument.findFirst({
-    where: { contractTrackingId: req.params.id },
-    orderBy: { createdAt: 'desc' },
-  });
-  if (!doc) return res.json({ hasClicksign: false });
-  const rawPayload = (doc.rawPayload as any) ?? {};
-  return res.json({
-    hasClicksign: true,
-    status: doc.status,
-    signers: rawPayload.signers ?? [],
-    envelopeId: doc.externalEnvelopeId,
-  });
+  try {
+    const { refreshClicksignStatus } = await import('../integrations/clicksign/clicksign.service');
+    const result = await refreshClicksignStatus(req.params.id);
+    if (!result) return res.json({ hasClicksign: false });
+    return res.json({
+      hasClicksign: true,
+      status: result.status,
+      signers: result.signers,
+      envelopeId: result.envelopeId,
+    });
+  } catch {
+    // fallback para leitura do banco se a API Clicksign estiver indisponível
+    const doc = await prisma.clicksignDocument.findFirst({
+      where: { contractTrackingId: req.params.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!doc) return res.json({ hasClicksign: false });
+    const rawPayload = (doc.rawPayload as any) ?? {};
+    return res.json({
+      hasClicksign: true,
+      status: doc.status,
+      signers: rawPayload.signers ?? [],
+      envelopeId: doc.externalEnvelopeId,
+    });
+  }
 }
 
 export async function postSendToClicksign(req: Request, res: Response, _next: NextFunction) {

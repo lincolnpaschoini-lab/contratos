@@ -432,7 +432,7 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
         const signed = signer.status === 'signed' || signer.signed_at;
       %>
       <div class="d-flex align-items-center gap-2" data-signer-email="<%= signer.email %>">
-        <i class="bi <%= signed ? 'bi-check-circle-fill text-success' : 'bi-clock text-warning' %> fs-5 signer-icon"></i>
+        <i class="bi <%= signed ? 'bi-check-circle-fill text-success' : 'bi-arrow-clockwise text-warning signer-spin' %> fs-5 signer-icon"></i>
         <div>
           <div class="fw-semibold small"><%= signer.name %></div>
           <div class="text-muted" style="font-size:.8rem"><%= signer.email %></div>
@@ -542,9 +542,21 @@ document.getElementById('modalComplete')?.addEventListener('show.bs.modal', func
   document.getElementById('completeStepName').textContent = stepName;
 });
 
+// ── Utilitários ─────────────────────────────────────────────────────────────
+function formatBRT(isoString) {
+  if (!isoString) return '';
+  try {
+    return new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    }).format(new Date(isoString));
+  } catch (e) { return isoString; }
+}
+
 // ── Polling de atualizações em tempo real ───────────────────────────────────
 (function() {
-  const CONTRACT_ID = '<%= contract.id %>';
+  const CONTRACT_ID    = '<%= contract.id %>';
   const INITIAL_STEP   = '<%= contract.currentStep %>';
   const INITIAL_STATUS = '<%= contract.overallStatus %>';
 
@@ -557,10 +569,10 @@ document.getElementById('modalComplete')?.addEventListener('show.bs.modal', func
           location.reload();
         }
       })
-      .catch(function() {}); // silencia erros de rede
+      .catch(function() {});
   }
 
-  // Polling de signatários Clicksign — atualiza ícones sem recarregar
+  // Polling de signatários Clicksign — consulta API live e atualiza DOM
   var csCard = document.getElementById('clicksign-card');
   function pollClicksignStatus() {
     fetch('/contracts/' + CONTRACT_ID + '/clicksign-status', { headers: { Accept: 'application/json' } })
@@ -568,7 +580,6 @@ document.getElementById('modalComplete')?.addEventListener('show.bs.modal', func
       .then(function(data) {
         if (!data.hasClicksign) return;
 
-        // Atualiza cada signatário já na tela
         var signers = data.signers || [];
         signers.forEach(function(signer) {
           var row = document.querySelector('[data-signer-email="' + signer.email + '"]');
@@ -578,18 +589,19 @@ document.getElementById('modalComplete')?.addEventListener('show.bs.modal', func
           var badge  = row.querySelector('.signer-status-badge');
           var dateEl = row.querySelector('.signer-date');
           if (icon) {
-            icon.className = 'bi fs-5 signer-icon ' + (signed ? 'bi-check-circle-fill text-success' : 'bi-clock text-warning');
+            icon.className = 'bi fs-5 signer-icon ' +
+              (signed ? 'bi-check-circle-fill text-success' : 'bi-arrow-clockwise text-warning signer-spin');
           }
           if (badge) {
             badge.className = 'badge signer-status-badge ' + (signed ? 'bg-success' : 'bg-warning text-dark');
             badge.textContent = signed ? 'Assinado' : 'Pendente';
           }
-          if (dateEl && signer.signed_at) {
-            dateEl.textContent = signer.signed_at;
+          if (dateEl) {
+            dateEl.textContent = signed ? formatBRT(signer.signed_at) : '';
           }
         });
 
-        // Se o status do envelope mudou (ex: running → closed), recarrega
+        // Se envelope fechou (todos assinaram), recarrega para atualizar linha do tempo
         if (csCard) {
           var wasRunning = csCard.dataset.clicksignRunning === 'true';
           var isRunning  = data.status === 'running';
@@ -601,14 +613,13 @@ document.getElementById('modalComplete')?.addEventListener('show.bs.modal', func
       .catch(function() {});
   }
 
-  // Inicia o polling
   var stepInterval = setInterval(pollStepStatus, 10000);
   var csInterval   = null;
   if (csCard && csCard.dataset.clicksignRunning === 'true') {
-    csInterval = setInterval(pollClicksignStatus, 5000);
+    // 15s para não sobrecarregar a API do Clicksign
+    csInterval = setInterval(pollClicksignStatus, 15000);
   }
 
-  // Para polling ao sair da página
   window.addEventListener('beforeunload', function() {
     clearInterval(stepInterval);
     if (csInterval) clearInterval(csInterval);
