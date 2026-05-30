@@ -5,14 +5,24 @@ import { sendMail } from './graph-mailer';
 
 const ACTION_EXPIRY_DAYS = 30;
 
-/** Dispara notificação de cadastro pendente. Idempotente: não reenvia se já existe token ativo. */
+/** Dispara notificação de cadastro pendente. Lança erro se credenciais não estiverem configuradas. */
 export async function sendRegistrationActionEmail(trackingId: string): Promise<void> {
-  if (!env.GRAPH_CLIENT_ID || !env.GRAPH_CLIENT_SECRET || !env.REGISTRATION_NOTIFY_EMAIL) {
-    logger.warn('[EMAIL] Notificação de cadastro ignorada — GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET ou REGISTRATION_NOTIFY_EMAIL não configurados');
-    return;
+  logger.info(`[EMAIL] sendRegistrationActionEmail chamado — tracking: ${trackingId}`);
+  logger.info(`[EMAIL] GRAPH_TENANT_ID: ${env.GRAPH_TENANT_ID ? 'configurado' : 'AUSENTE'}`);
+  logger.info(`[EMAIL] GRAPH_CLIENT_ID: ${env.GRAPH_CLIENT_ID ? 'configurado' : 'AUSENTE'}`);
+  logger.info(`[EMAIL] GRAPH_CLIENT_SECRET: ${env.GRAPH_CLIENT_SECRET ? 'configurado' : 'AUSENTE'}`);
+  logger.info(`[EMAIL] GRAPH_SENDER_EMAIL: ${env.GRAPH_SENDER_EMAIL}`);
+  logger.info(`[EMAIL] REGISTRATION_NOTIFY_EMAIL: ${env.REGISTRATION_NOTIFY_EMAIL ?? 'AUSENTE'}`);
+
+  if (!env.GRAPH_TENANT_ID || !env.GRAPH_CLIENT_ID || !env.GRAPH_CLIENT_SECRET) {
+    throw new Error('Credenciais Microsoft Graph não configuradas (GRAPH_TENANT_ID, GRAPH_CLIENT_ID ou GRAPH_CLIENT_SECRET ausentes)');
   }
 
-  // Idempotência: não cria novo token se já existe um ativo para este contrato
+  if (!env.REGISTRATION_NOTIFY_EMAIL) {
+    throw new Error('REGISTRATION_NOTIFY_EMAIL não configurado');
+  }
+
+  // Para reenvio manual: o controller já invalidou tokens anteriores antes de chamar esta função
   const existing = await prisma.actionToken.findFirst({
     where: {
       trackingId,
@@ -22,35 +32,30 @@ export async function sendRegistrationActionEmail(trackingId: string): Promise<v
     },
   });
 
-  if (existing) {
-    logger.info(`[EMAIL] Token de cadastro já existe para ${trackingId} — e-mail não reenviado`);
-    return;
-  }
-
   const tracking = await prisma.contractTracking.findUnique({
     where: { id: trackingId },
-    include: {
-      customer: true,
-      pipedriveDeal: true,
-    },
+    include: { customer: true, pipedriveDeal: true },
   });
 
-  if (!tracking) return;
+  if (!tracking) throw new Error(`Contrato ${trackingId} não encontrado`);
 
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + ACTION_EXPIRY_DAYS);
+  let token: string;
 
-  const { token } = await prisma.actionToken.create({
-    data: {
-      trackingId,
-      action: 'complete_registration',
-      expiresAt,
-      metadata: { customerName: tracking.customer.name },
-    },
-    select: { token: true },
-  });
+  if (existing) {
+    logger.info(`[EMAIL] Reutilizando token existente para ${trackingId}`);
+    token = existing.token;
+  } else {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + ACTION_EXPIRY_DAYS);
+    const created = await prisma.actionToken.create({
+      data: { trackingId, action: 'complete_registration', expiresAt, metadata: { customerName: tracking.customer.name } },
+      select: { token: true },
+    });
+    token = created.token;
+  }
 
   const actionUrl = `${env.APP_URL}/acoes/cadastro/${token}`;
+  logger.info(`[EMAIL] URL de ação gerada: ${actionUrl}`);
 
   await sendMail({
     to: env.REGISTRATION_NOTIFY_EMAIL,

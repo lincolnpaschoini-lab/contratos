@@ -8,8 +8,12 @@ let cachedToken: { value: string; expiresAt: number } | null = null;
 
 async function getAccessToken(): Promise<string> {
   if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
+    logger.info('[GRAPH] Usando token em cache');
     return cachedToken.value;
   }
+
+  logger.info(`[GRAPH] Solicitando token — tenant: ${env.GRAPH_TENANT_ID}, client: ${env.GRAPH_CLIENT_ID}`);
+  logger.info(`[GRAPH] Endpoint de token: ${TOKEN_ENDPOINT}`);
 
   const body = new URLSearchParams({
     grant_type: 'client_credentials',
@@ -24,13 +28,16 @@ async function getAccessToken(): Promise<string> {
     body: body.toString(),
   });
 
+  const responseText = await res.text();
+  logger.info(`[GRAPH] Resposta autenticação — status: ${res.status}, body: ${responseText.slice(0, 300)}`);
+
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Graph: falha na autenticação — ${res.status} ${err}`);
+    throw new Error(`Graph autenticação falhou — HTTP ${res.status}: ${responseText}`);
   }
 
-  const data = await res.json() as { access_token: string; expires_in: number };
+  const data = JSON.parse(responseText) as { access_token: string; expires_in: number };
   cachedToken = { value: data.access_token, expiresAt: Date.now() + data.expires_in * 1000 };
+  logger.info('[GRAPH] Token obtido com sucesso');
   return cachedToken.value;
 }
 
@@ -40,6 +47,9 @@ export async function sendMail(params: {
   html: string;
 }): Promise<void> {
   const token = await getAccessToken();
+
+  logger.info(`[GRAPH] Enviando e-mail para ${params.to} — assunto: "${params.subject}"`);
+  logger.info(`[GRAPH] Endpoint de envio: ${SEND_MAIL_ENDPOINT}`);
 
   const payload = {
     message: {
@@ -61,8 +71,9 @@ export async function sendMail(params: {
 
   if (!res.ok) {
     const err = await res.text();
-    throw new Error(`Graph: falha ao enviar e-mail — ${res.status} ${err}`);
+    logger.error(`[GRAPH] Falha no envio — HTTP ${res.status}: ${err}`);
+    throw new Error(`Graph sendMail falhou — HTTP ${res.status}: ${err}`);
   }
 
-  logger.info(`Graph: e-mail enviado para ${params.to} — "${params.subject}"`);
+  logger.info(`[GRAPH] E-mail enviado com sucesso para ${params.to}`);
 }
