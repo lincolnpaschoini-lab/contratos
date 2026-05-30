@@ -34,6 +34,10 @@ import { webhookEventRoutes } from './modules/webhooks/webhooks.routes';
 
 const app = express();
 
+// Necessário para confiar no X-Forwarded-For do proxy (Easypanel/nginx/Docker)
+// Sem isso o rate limiter não identifica IPs corretamente e bloqueia todos juntos
+app.set('trust proxy', 1);
+
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {

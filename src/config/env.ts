@@ -33,8 +33,8 @@ const envSchema = z.object({
   LOG_FILE_PATH: z.string().default('./logs'),
 
   RATE_LIMIT_WINDOW_MS: z.coerce.number().default(900000),
-  RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(100),
-  WEBHOOK_RATE_LIMIT_MAX: z.coerce.number().default(200),
+  RATE_LIMIT_MAX_REQUESTS: z.coerce.number().default(1000),
+  WEBHOOK_RATE_LIMIT_MAX: z.coerce.number().default(500),
 });
 
 const parsed = envSchema.safeParse(process.env);
