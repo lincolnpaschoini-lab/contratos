@@ -42,20 +42,21 @@ async function getAccessToken(): Promise<string> {
 }
 
 export async function sendMail(params: {
-  to: string;
+  to: string | string[];
   subject: string;
   html: string;
 }): Promise<void> {
   const token = await getAccessToken();
 
-  logger.info(`[GRAPH] Enviando e-mail para ${params.to} — assunto: "${params.subject}"`);
+  const recipients = Array.isArray(params.to) ? params.to : [params.to];
+  logger.info(`[GRAPH] Enviando e-mail para ${recipients.join(', ')} — assunto: "${params.subject}"`);
   logger.info(`[GRAPH] Endpoint de envio: ${SEND_MAIL_ENDPOINT}`);
 
   const payload = {
     message: {
       subject: params.subject,
       body: { contentType: 'HTML', content: params.html },
-      toRecipients: [{ emailAddress: { address: params.to } }],
+      toRecipients: recipients.map((address) => ({ emailAddress: { address } })),
     },
     saveToSentItems: false,
   };
@@ -75,5 +76,5 @@ export async function sendMail(params: {
     throw new Error(`Graph sendMail falhou — HTTP ${res.status}: ${err}`);
   }
 
-  logger.info(`[GRAPH] E-mail enviado com sucesso para ${params.to}`);
+  logger.info(`[GRAPH] E-mail enviado com sucesso para ${recipients.join(', ')}`);
 }

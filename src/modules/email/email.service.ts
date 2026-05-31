@@ -70,7 +70,66 @@ export async function sendRegistrationActionEmail(trackingId: string): Promise<v
   logger.info(`[EMAIL] Notificação enviada para ${env.REGISTRATION_NOTIFY_EMAIL} — tracking ${trackingId}`);
 }
 
-// ─── Template ─────────────────────────────────────────────────────────────────
+// ─── Notificação de atraso ────────────────────────────────────────────────────
+
+/** Dispara alerta de atraso para todos os e-mails configurados em DELAY_NOTIFY_EMAILS. */
+export async function sendDelayNotificationEmail(trackingId: string, stepId: string): Promise<void> {
+  if (!env.GRAPH_TENANT_ID || !env.GRAPH_CLIENT_ID || !env.GRAPH_CLIENT_SECRET) {
+    logger.warn('[EMAIL] Alerta de atraso ignorado — credenciais Graph não configuradas');
+    return;
+  }
+
+  const recipients = (env.DELAY_NOTIFY_EMAILS ?? '')
+    .split(',')
+    .map((e) => e.trim())
+    .filter(Boolean);
+
+  if (recipients.length === 0) {
+    logger.warn('[EMAIL] Alerta de atraso ignorado — DELAY_NOTIFY_EMAILS não configurado');
+    return;
+  }
+
+  const tracking = await prisma.contractTracking.findUnique({
+    where: { id: trackingId },
+    include: {
+      customer: true,
+      pipedriveDeal: true,
+      assignedUser: { select: { name: true, email: true } },
+      steps: {
+        orderBy: { stepOrder: 'asc' },
+        include: { assignedUser: { select: { name: true } } },
+      },
+    },
+  });
+
+  if (!tracking) {
+    logger.warn(`[EMAIL] Alerta de atraso: tracking ${trackingId} não encontrado`);
+    return;
+  }
+
+  const delayedStep = tracking.steps.find((s) => s.id === stepId);
+  if (!delayedStep) {
+    logger.warn(`[EMAIL] Alerta de atraso: step ${stepId} não encontrado`);
+    return;
+  }
+
+  const stepLabel = STEP_LABELS[delayedStep.stepName as keyof typeof STEP_LABELS] ?? delayedStep.stepName;
+  const daysLate  = delayedStep.dueAt
+    ? Math.floor((Date.now() - new Date(delayedStep.dueAt).getTime()) / 86_400_000)
+    : null;
+
+  const contractUrl = `${env.APP_URL}/contracts/${trackingId}`;
+
+  await sendMail({
+    to: recipients,
+    subject: `⚠ Atraso: ${stepLabel} — ${tracking.customer.name}`,
+    html: buildDelayEmailHtml(tracking, delayedStep, stepLabel, daysLate, contractUrl),
+  });
+
+  logger.info(`[EMAIL] Alerta de atraso enviado para ${recipients.join(', ')} — step ${stepLabel} (${trackingId})`);
+}
+
+// ─── Templates ────────────────────────────────────────────────────────────────
 
 type Tracking = Awaited<ReturnType<typeof prisma.contractTracking.findUnique>> & {
   customer: NonNullable<unknown>;
@@ -111,6 +170,165 @@ const STEP_STATUS_ICON: Record<string, string> = {
   DELAYED:     '⚠',
   PENDING:     '○',
 };
+
+function buildDelayEmailHtml(
+  tracking: any,
+  delayedStep: any,
+  stepLabel: string,
+  daysLate: number | null,
+  contractUrl: string,
+): string {
+  const c = tracking.customer;
+  const d = tracking.pipedriveDeal;
+
+  const addressParts = [c.address, c.city, c.state && c.city ? `/${c.state}` : c.state, c.zipCode ? `CEP ${c.zipCode}` : null].filter(Boolean);
+  const address = addressParts.join(' ') || null;
+
+  const stepsHtml = tracking.steps.map((step: any) => {
+    const isDelayed = step.id === delayedStep.id;
+    const color  = STEP_STATUS_COLOR[step.status] ?? '#94a3b8';
+    const bg     = STEP_STATUS_BG[step.status]    ?? '#f1f5f9';
+    const icon   = STEP_STATUS_ICON[step.status]  ?? '○';
+    const label  = STEP_LABELS[step.stepName as keyof typeof STEP_LABELS] ?? step.stepName;
+    const status = STEP_STATUS_LABELS[step.status as keyof typeof STEP_STATUS_LABELS] ?? step.status;
+
+    const details = [
+      step.startedAt   ? `Iniciado: ${formatDateTime(step.startedAt)}`   : null,
+      step.completedAt ? `Concluído: ${formatDateTime(step.completedAt)}` : null,
+      step.dueAt       ? `Prazo: ${formatDate(step.dueAt)}`              : null,
+      step.assignedUser ? `Responsável: ${step.assignedUser.name}`       : null,
+    ].filter(Boolean).join('&nbsp;&nbsp;·&nbsp;&nbsp;');
+
+    return `
+    <tr style="${isDelayed ? 'background:#fff5f5;' : ''}">
+      <td style="padding:8px ${isDelayed ? '8px' : '0'};vertical-align:top;${isDelayed ? 'border-left:3px solid #dc2626;' : ''}">
+        <span style="display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;border-radius:50%;background:${bg};color:${color};font-size:12px;font-weight:700;">${icon}</span>
+      </td>
+      <td style="padding:8px 8px 8px ${isDelayed ? '10px' : '10px'};vertical-align:top;">
+        <div style="font-size:13px;font-weight:700;color:#1a1f2e;">${label}
+          <span style="font-size:11px;font-weight:600;color:${color};background:${bg};padding:2px 8px;border-radius:10px;margin-left:6px;">${status}</span>
+          ${isDelayed && daysLate ? `<span style="font-size:11px;font-weight:700;color:#dc2626;margin-left:6px;">${daysLate} dia${daysLate > 1 ? 's' : ''} em atraso</span>` : ''}
+        </div>
+        ${details ? `<div style="font-size:11px;color:#64748b;margin-top:3px;">${details}</div>` : ''}
+        ${step.notes ? `<div style="font-size:11px;color:#475569;margin-top:4px;font-style:italic;">"${step.notes}"</div>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Etapa em atraso</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6fb;font-family:Arial,Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6fb;padding:32px 16px;">
+<tr><td align="center">
+<table width="620" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,.10);">
+
+  <!-- Header -->
+  <tr>
+    <td style="background:#1a1f2e;padding:26px 36px;">
+      <p style="margin:0;color:#fff;font-size:20px;font-weight:700;">Paschoini Advogados</p>
+      <p style="margin:4px 0 0;color:#94a3b8;font-size:13px;">Sistema interno de contratos</p>
+    </td>
+  </tr>
+
+  <!-- Alerta vermelho -->
+  <tr>
+    <td style="background:#fee2e2;border-bottom:2px solid #fca5a5;padding:16px 36px;">
+      <p style="margin:0;color:#991b1b;font-size:15px;font-weight:700;">
+        ⚠&nbsp; Etapa em atraso: ${stepLabel}
+      </p>
+      ${daysLate ? `<p style="margin:4px 0 0;color:#b91c1c;font-size:13px;">${daysLate} dia${daysLate > 1 ? 's' : ''} além do prazo estabelecido</p>` : ''}
+    </td>
+  </tr>
+
+  <!-- Corpo -->
+  <tr><td style="padding:32px 36px;">
+
+    ${sectionTitle('Dados da Empresa')}
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Razão Social', c.name)}
+      ${row('CNPJ / CPF', c.document)}
+      ${row('E-mail', c.email)}
+      ${row('Telefone', c.phone)}
+      ${row('Endereço', address)}
+    </table>
+
+    ${c.contactName || c.contactEmail ? `
+    ${sectionTitle('Contato Responsável')}
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Nome', c.contactName)}
+      ${row('E-mail', c.contactEmail)}
+      ${row('Telefone', c.contactPhone)}
+    </table>` : ''}
+
+    ${sectionTitle('Dados do Contrato')}
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Deal Pipedrive', d?.title ?? null)}
+      ${row('ID do Deal', d?.externalDealId ? `#${d.externalDealId}` : null)}
+      ${row('Tipo de Serviço', d?.tipoServico ?? null)}
+      ${row('Valor', d?.value ? formatCurrency(d.value) : null)}
+      ${row('Proposta aceita em', tracking.proposalAcceptedAt ? formatDate(tracking.proposalAcceptedAt) : null)}
+      ${row('Responsável interno', tracking.assignedUser?.name ?? null)}
+    </table>
+
+    ${sectionTitle('Etapa em Atraso')}
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff5f5;border:1px solid #fca5a5;border-radius:8px;">
+      <tr><td style="padding:16px 20px;">
+        <table width="100%" cellpadding="0" cellspacing="0">
+          ${row('Etapa', stepLabel)}
+          ${row('Iniciada em', delayedStep.startedAt ? formatDateTime(delayedStep.startedAt) : null)}
+          ${row('Prazo era', delayedStep.dueAt ? formatDate(delayedStep.dueAt) : null)}
+          ${row('Dias em atraso', daysLate ? `<span style="color:#dc2626;font-weight:700;">${daysLate} dia${daysLate > 1 ? 's' : ''}</span>` : null)}
+          ${row('Responsável', delayedStep.assignedUser?.name ?? null)}
+          ${row('Observação', delayedStep.notes ?? null)}
+        </table>
+      </td></tr>
+    </table>
+
+    ${sectionTitle('Linha do Tempo')}
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${stepsHtml}
+    </table>
+
+    <!-- Link para o contrato -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:28px 0 8px;">
+      <tr>
+        <td align="center">
+          <table cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background:#1a1f2e;border-radius:7px;">
+                <a href="${contractUrl}"
+                   style="display:inline-block;padding:13px 32px;color:#fff;font-size:14px;font-weight:700;text-decoration:none;">
+                  → Ver contrato no sistema
+                </a>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+
+  </td></tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 36px;">
+      <p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">
+        Paschoini Advogados &middot; Sistema interno de contratos &middot; Notificação automática
+      </p>
+    </td>
+  </tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
 
 function buildEmailHtml(tracking: any, actionUrl: string): string {
   const c  = tracking.customer;

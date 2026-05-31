@@ -4,7 +4,7 @@ import { AppError } from '../../shared/middlewares/error.middleware';
 import { addBusinessDays, isOverdue } from '../../shared/utils/business-days';
 import { logger } from '../../config/logger';
 import { broadcastEvent } from '../../shared/events/sse.service';
-import { sendRegistrationActionEmail } from '../email/email.service';
+import { sendRegistrationActionEmail, sendDelayNotificationEmail } from '../email/email.service';
 import {
   findAllTrackings,
   findTrackingById,
@@ -572,6 +572,10 @@ export async function recalculateAllDelays() {
       if (notDoneJob && isOverdue(step.dueAt)) {
         await updateStep(step.id, { status: StepStatus.DELAYED });
         updated++;
+        // Notifica por e-mail ao entrar em atraso pela primeira vez (notDoneJob exclui já-DELAYED)
+        sendDelayNotificationEmail(tracking.id, step.id).catch((err: Error) =>
+          logger.error(`[EMAIL] Falha ao notificar atraso (${step.stepName}): ${err.message}`),
+        );
       }
     }
     await recalculateOverallStatus(tracking.id);

@@ -42,6 +42,8 @@ const envSchema = z.object({
   GRAPH_CLIENT_SECRET: z.string().optional(),
   GRAPH_SENDER_EMAIL: z.string().default('noreply@paschoini.adv.br'),
   REGISTRATION_NOTIFY_EMAIL: z.string().optional(),
+  // E-mails separados por vírgula que recebem alerta de atraso de etapa
+  DELAY_NOTIFY_EMAILS: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse(process.env);
