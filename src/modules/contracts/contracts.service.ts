@@ -122,15 +122,16 @@ export async function createContractFromDeal(params: {
     } as any,
   });
 
-  // Prepara as etapas — Preparação começa PENDING para aparecer em "Proposta Aceita" no pipeline
+  // Prepara as etapas — Proposta Aceita nasce IN_PROGRESS com prazo do SLA
+  const proposalDueAt = addBusinessDays(now, slaMap.get(StepName.PROPOSAL_ACCEPTED) ?? 1);
   const steps = [
     {
       stepName: StepName.PROPOSAL_ACCEPTED,
       stepOrder: 1,
-      status: StepStatus.COMPLETED,
+      status: StepStatus.IN_PROGRESS,
       startedAt: now,
-      completedAt: now,
-      dueAt: null,
+      completedAt: null,
+      dueAt: proposalDueAt,
     },
     {
       stepName: StepName.CONTRACT_PREPARATION,
@@ -173,15 +174,15 @@ export async function createContractFromDeal(params: {
     steps,
   });
 
-  // Registra apenas o histórico da proposta aceita — preparação aguarda ação manual
+  // Registra histórico da proposta aceita — nasce IN_PROGRESS, aguarda conclusão manual
   const proposalStep = tracking.steps.find((s) => s.stepName === StepName.PROPOSAL_ACCEPTED)!;
 
   await prisma.stepHistory.create({
     data: {
       contractStepId: proposalStep.id,
       fromStatus: null,
-      toStatus: StepStatus.COMPLETED,
-      changeReason: 'Proposta aceita via Pipedrive',
+      toStatus: StepStatus.IN_PROGRESS,
+      changeReason: 'Proposta aceita via Pipedrive — aguardando avanço para Preparação',
       metadata: {
         source: 'pipedrive',
         externalDealId: params.externalDealId,
@@ -323,9 +324,7 @@ export async function startStep(trackingId: string, stepId: string, userId: stri
   }
 
   const slaMap = await getSlaMap();
-  const dueAt = step.stepName !== StepName.PROPOSAL_ACCEPTED
-    ? addBusinessDays(new Date(), slaMap.get(step.stepName) ?? 1)
-    : null;
+  const dueAt = addBusinessDays(new Date(), slaMap.get(step.stepName) ?? 1);
 
   const isSystemActor = !userId || userId.startsWith('system-');
 

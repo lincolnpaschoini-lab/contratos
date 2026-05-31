@@ -270,7 +270,7 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
           </div>
 
           <!-- Ações -->
-          <% if (step.stepName !== 'PROPOSAL_ACCEPTED') { %>
+          <% if (canStart || canComplete || step.stepName === 'CONTRACT_REGISTRATION') { %>
           <div class="timeline-actions mt-2 d-flex gap-2 flex-wrap">
             <% if (canStart) { %>
             <form method="POST" action="/contracts/<%= contract.id %>/steps/<%= step.id %>/start" class="d-inline">
