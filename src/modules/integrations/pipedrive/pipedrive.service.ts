@@ -66,10 +66,18 @@ function resolveCompanyConfig(companyId: string): CompanyConfig {
     return match;
   }
 
-  // Fallback: usa config legado (Paschoini sem company_id configurado)
+  // Fallback seguro: só usa config legado se nenhuma empresa extra está configurada
+  // (sistema ainda de tenant único). Se houver pelo menos uma empresa configurada,
+  // rejeita company_ids desconhecidos para não misturar dados entre empresas.
+  const hasMultiTenant = companies.slice(1).some((c) => c.companyId && c.apiToken);
+  if (hasMultiTenant) {
+    logger.error(`Pipedrive webhook: company_id "${companyId}" não está mapeado em nenhuma empresa configurada — webhook IGNORADO para evitar dados incorretos. Configure PIPEDRIVE_ATTIVOS_COMPANY_ID ou PIPEDRIVE_FOCUS_COMPANY_ID.`);
+    return null as any; // sinaliza para o chamador ignorar
+  }
+
   logger.warn(`Pipedrive webhook: company_id "${companyId}" não mapeado — usando config padrão (Paschoini)`);
   return {
-    companyName: 'Paschoini (fallback)',
+    companyName: 'Paschoini',
     apiToken: env.PIPEDRIVE_API_TOKEN ?? '',
     domain: env.PIPEDRIVE_DOMAIN ?? '',
     proposalStageId: env.PIPEDRIVE_PROPOSAL_ACCEPTED_STAGE_ID,
@@ -137,6 +145,11 @@ export async function processPipedriveWebhook(
   // Identifica a empresa pelo company_id do metadata do webhook
   const companyId = String(payload.meta?.company_id ?? '');
   const config    = resolveCompanyConfig(companyId);
+
+  if (!config || !config.apiToken) {
+    logger.error(`Pipedrive webhook ignorado: empresa não identificada para company_id "${companyId}". Configure a variável PIPEDRIVE_*_COMPANY_ID correspondente.`);
+    return { skipped: true, reason: `company_id "${companyId}" não mapeado — configure a variável PIPEDRIVE_*_COMPANY_ID` };
+  }
 
   let webhookEventId = existingEventId;
 
