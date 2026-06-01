@@ -16,3 +16,8 @@ export async function readAllNotifications(req: Request, res: Response) {
   await markAllAsRead();
   res.json({ success: true });
 }
+
+export async function countNotifications(req: Request, res: Response) {
+  const unreadCount = await getUnreadCount();
+  res.json({ unreadCount });
+}

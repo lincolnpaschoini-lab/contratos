@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { requireAuth } from '../../shared/middlewares/auth.middleware';
-import { listNotifications, readNotification, readAllNotifications } from './notifications.controller';
+import { listNotifications, readNotification, readAllNotifications, countNotifications } from './notifications.controller';
 
 const router = Router();
 
 router.use(requireAuth);
 
 router.get('/', listNotifications);
+router.get('/count', countNotifications);
 router.post('/read-all', readAllNotifications);
 router.post('/:id/read', readNotification);
 

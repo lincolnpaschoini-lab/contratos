@@ -299,3 +299,20 @@ function showWebhookUpdateBanner(count) {
 
   connect();
 })();
+
+/* ── Polling de fallback para badge de notificações ─────────────────── */
+// Garante que o badge fique correto mesmo que o SSE perca algum evento.
+async function pollNotifCount() {
+  try {
+    var res  = await fetch('/notifications/count', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+    if (!res.ok) return;
+    var data = await res.json();
+    if (typeof window._updateNotifBadge === 'function') {
+      window._updateNotifBadge(data.unreadCount ?? 0);
+    }
+  } catch { /* silencioso */ }
+}
+
+// Roda imediatamente ao carregar e depois a cada 15s
+pollNotifCount();
+setInterval(pollNotifCount, 15000);
