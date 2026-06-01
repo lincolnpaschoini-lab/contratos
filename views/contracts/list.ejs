@@ -90,7 +90,7 @@
           const progressPct = Math.round((completedCount / 5) * 100);
         %>
         <%
-          const cCompanyId = (c.pipedriveDeal?.rawPayload as any)?.meta?.company_id ?? null;
+          const cCompanyId = (c.pipedriveDeal?.rawPayload)?.meta?.company_id ?? null;
           const cCompany   = h.getCompanyInfo(cCompanyId);
         %>
         <tr class="<%= c.overallStatus === 'DELAYED' ? 'table-danger-subtle' : '' %>">
