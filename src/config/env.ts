@@ -16,12 +16,32 @@ const envSchema = z.object({
 
   CORS_ORIGIN: z.string().default('http://localhost:3000'),
 
+  // ─── Pipedrive — Paschoini (legado, mantém retrocompatibilidade) ─────────────
   PIPEDRIVE_API_TOKEN: z.string().optional(),
   PIPEDRIVE_DOMAIN: z.string().optional(),
   PIPEDRIVE_PROPOSAL_ACCEPTED_STAGE_ID: z.string().default(''),
   PIPEDRIVE_CONTRACT_PREPARATION_STAGE_ID: z.string().default(''),
   PIPEDRIVE_CONTRACT_SIGNING_STAGE_ID: z.string().default(''),
   PIPEDRIVE_WEBHOOK_SECRET: z.string().optional(),
+
+  // ─── Pipedrive — Paschoini (company_id para identificação multi-tenant) ──────
+  PIPEDRIVE_PASCHOINI_COMPANY_ID: z.string().optional(),
+
+  // ─── Pipedrive — Attivos ──────────────────────────────────────────────────────
+  PIPEDRIVE_ATTIVOS_COMPANY_ID: z.string().optional(),
+  PIPEDRIVE_ATTIVOS_API_TOKEN: z.string().optional(),
+  PIPEDRIVE_ATTIVOS_DOMAIN: z.string().optional(),
+  PIPEDRIVE_ATTIVOS_PROPOSAL_STAGE_ID: z.string().default(''),
+  PIPEDRIVE_ATTIVOS_PREPARATION_STAGE_ID: z.string().default(''),
+  PIPEDRIVE_ATTIVOS_SIGNING_STAGE_ID: z.string().default(''),
+
+  // ─── Pipedrive — Focus ────────────────────────────────────────────────────────
+  PIPEDRIVE_FOCUS_COMPANY_ID: z.string().optional(),
+  PIPEDRIVE_FOCUS_API_TOKEN: z.string().optional(),
+  PIPEDRIVE_FOCUS_DOMAIN: z.string().optional(),
+  PIPEDRIVE_FOCUS_PROPOSAL_STAGE_ID: z.string().default(''),
+  PIPEDRIVE_FOCUS_PREPARATION_STAGE_ID: z.string().default(''),
+  PIPEDRIVE_FOCUS_SIGNING_STAGE_ID: z.string().default(''),
 
   CLICKSIGN_API_KEY: z.string().optional(),
   CLICKSIGN_API_URL: z.string().url().default('https://sandbox.clicksign.com'),

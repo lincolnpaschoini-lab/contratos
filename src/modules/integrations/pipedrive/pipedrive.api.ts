@@ -6,21 +6,27 @@ interface ApiResponse<T> {
   data: T | null;
 }
 
-async function apiGet<T>(path: string): Promise<T | null> {
-  const token = env.PIPEDRIVE_API_TOKEN;
-  const domain = env.PIPEDRIVE_DOMAIN;
+/** Contexto de API por empresa — quando ausente usa o config legado (Paschoini). */
+export interface PipedriveApiContext {
+  apiToken: string;
+  domain: string;
+  companyName?: string;
+}
+
+async function apiGet<T>(path: string, ctx?: PipedriveApiContext): Promise<T | null> {
+  const token  = ctx?.apiToken || env.PIPEDRIVE_API_TOKEN;
+  const domain = ctx?.domain   || env.PIPEDRIVE_DOMAIN;
 
   if (!token || !domain) {
-    logger.warn('Pipedrive API: PIPEDRIVE_API_TOKEN ou PIPEDRIVE_DOMAIN ausentes');
-    console.warn('[PIPEDRIVE API] Token ou domínio não configurados. Token:', !!token, 'Domain:', !!domain);
+    logger.warn('Pipedrive API: token ou domínio não configurados');
+    console.warn('[PIPEDRIVE API] Token ou domínio ausentes. Empresa:', ctx?.companyName ?? 'default');
     return null;
   }
 
-  // Monta URL sem URLSearchParams para máxima compatibilidade
-  const url = `https://${domain}/api/v1${path}?api_token=${token}`;
+  const url     = `https://${domain}/api/v1${path}?api_token=${token}`;
   const urlSafe = `https://${domain}/api/v1${path}?api_token=***`;
 
-  console.log(`[PIPEDRIVE API] GET ${urlSafe}`);
+  console.log(`[PIPEDRIVE API] GET ${urlSafe} (${ctx?.companyName ?? 'default'})`);
 
   try {
     const res = await fetch(url, {
@@ -109,39 +115,36 @@ export interface PipedriveUser {
 
 // ─── Funções de busca ─────────────────────────────────────────────────────────
 
-export async function fetchPipedriveUser(userId: number | string): Promise<PipedriveUser | null> {
-  const data = await apiGet<PipedriveUser>(`/users/${userId}`);
+export async function fetchPipedriveUser(userId: number | string, ctx?: PipedriveApiContext): Promise<PipedriveUser | null> {
+  const data = await apiGet<PipedriveUser>(`/users/${userId}`, ctx);
   if (data) logger.info(`Pipedrive: usuário ${userId} recuperado — ${data.name}`);
   return data;
 }
 
-export async function fetchOrganization(orgId: number | string): Promise<PipedriveOrganization | null> {
-  const data = await apiGet<PipedriveOrganization>(`/organizations/${orgId}`);
+export async function fetchOrganization(orgId: number | string, ctx?: PipedriveApiContext): Promise<PipedriveOrganization | null> {
+  const data = await apiGet<PipedriveOrganization>(`/organizations/${orgId}`, ctx);
   if (data) logger.info(`Pipedrive: org ${orgId} recuperada — ${data.name}`);
   return data;
 }
 
-export async function fetchPerson(personId: number | string): Promise<PipedrivePerson | null> {
-  const data = await apiGet<PipedrivePerson>(`/persons/${personId}`);
+export async function fetchPerson(personId: number | string, ctx?: PipedriveApiContext): Promise<PipedrivePerson | null> {
+  const data = await apiGet<PipedrivePerson>(`/persons/${personId}`, ctx);
   if (data) logger.info(`Pipedrive: pessoa ${personId} recuperada — ${data.name}`);
   return data;
 }
 
-/** Retorna todas as definições de campos de organizações (padrão + customizados). */
-export async function fetchOrganizationFields(): Promise<PipedriveField[]> {
-  const data = await apiGet<PipedriveField[]>('/organizationFields');
+export async function fetchOrganizationFields(ctx?: PipedriveApiContext): Promise<PipedriveField[]> {
+  const data = await apiGet<PipedriveField[]>('/organizationFields', ctx);
   return data ?? [];
 }
 
-/** Retorna todas as definições de campos de pessoas. */
-export async function fetchPersonFields(): Promise<PipedriveField[]> {
-  const data = await apiGet<PipedriveField[]>('/personFields');
+export async function fetchPersonFields(ctx?: PipedriveApiContext): Promise<PipedriveField[]> {
+  const data = await apiGet<PipedriveField[]>('/personFields', ctx);
   return data ?? [];
 }
 
-/** Retorna todas as definições de campos de negócios (deals), incluindo opções de enums. */
-export async function fetchDealFields(): Promise<PipedriveField[]> {
-  const data = await apiGet<PipedriveField[]>('/dealFields');
+export async function fetchDealFields(ctx?: PipedriveApiContext): Promise<PipedriveField[]> {
+  const data = await apiGet<PipedriveField[]>('/dealFields', ctx);
   return data ?? [];
 }
 

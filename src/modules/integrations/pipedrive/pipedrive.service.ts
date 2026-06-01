@@ -14,10 +14,69 @@ import {
   extractAddress,
   buildLabeledFields,
   detectDocument,
+  type PipedriveApiContext,
 } from './pipedrive.api';
 
 // API key do campo customizado "tipo_servico" no Pipedrive
 const TIPO_SERVICO_FIELD = 'b9e2317c3051565d2ad79d04ce9d8b9143ac1fc8';
+
+// ─── Configuração multi-empresa ───────────────────────────────────────────────
+
+interface CompanyConfig extends PipedriveApiContext {
+  proposalStageId: string;
+  preparationStageId: string;
+  signingStageId: string;
+}
+
+/** Resolve o config da empresa pelo company_id que vem no meta do webhook. */
+function resolveCompanyConfig(companyId: string): CompanyConfig {
+  const companies: (CompanyConfig & { companyId: string })[] = [
+    {
+      companyId: env.PIPEDRIVE_PASCHOINI_COMPANY_ID ?? '',
+      companyName: 'Paschoini',
+      apiToken: env.PIPEDRIVE_API_TOKEN ?? '',
+      domain: env.PIPEDRIVE_DOMAIN ?? '',
+      proposalStageId: env.PIPEDRIVE_PROPOSAL_ACCEPTED_STAGE_ID,
+      preparationStageId: env.PIPEDRIVE_CONTRACT_PREPARATION_STAGE_ID,
+      signingStageId: env.PIPEDRIVE_CONTRACT_SIGNING_STAGE_ID,
+    },
+    {
+      companyId: env.PIPEDRIVE_ATTIVOS_COMPANY_ID ?? '',
+      companyName: 'Attivos',
+      apiToken: env.PIPEDRIVE_ATTIVOS_API_TOKEN ?? '',
+      domain: env.PIPEDRIVE_ATTIVOS_DOMAIN ?? '',
+      proposalStageId: env.PIPEDRIVE_ATTIVOS_PROPOSAL_STAGE_ID,
+      preparationStageId: env.PIPEDRIVE_ATTIVOS_PREPARATION_STAGE_ID,
+      signingStageId: env.PIPEDRIVE_ATTIVOS_SIGNING_STAGE_ID,
+    },
+    {
+      companyId: env.PIPEDRIVE_FOCUS_COMPANY_ID ?? '',
+      companyName: 'Focus',
+      apiToken: env.PIPEDRIVE_FOCUS_API_TOKEN ?? '',
+      domain: env.PIPEDRIVE_FOCUS_DOMAIN ?? '',
+      proposalStageId: env.PIPEDRIVE_FOCUS_PROPOSAL_STAGE_ID,
+      preparationStageId: env.PIPEDRIVE_FOCUS_PREPARATION_STAGE_ID,
+      signingStageId: env.PIPEDRIVE_FOCUS_SIGNING_STAGE_ID,
+    },
+  ];
+
+  const match = companies.find((c) => c.companyId && c.companyId === String(companyId));
+  if (match) {
+    logger.info(`Pipedrive webhook: empresa identificada — ${match.companyName} (company_id: ${companyId})`);
+    return match;
+  }
+
+  // Fallback: usa config legado (Paschoini sem company_id configurado)
+  logger.warn(`Pipedrive webhook: company_id "${companyId}" não mapeado — usando config padrão (Paschoini)`);
+  return {
+    companyName: 'Paschoini (fallback)',
+    apiToken: env.PIPEDRIVE_API_TOKEN ?? '',
+    domain: env.PIPEDRIVE_DOMAIN ?? '',
+    proposalStageId: env.PIPEDRIVE_PROPOSAL_ACCEPTED_STAGE_ID,
+    preparationStageId: env.PIPEDRIVE_CONTRACT_PREPARATION_STAGE_ID,
+    signingStageId: env.PIPEDRIVE_CONTRACT_SIGNING_STAGE_ID,
+  };
+}
 
 // Suporta formato v1 (event + current) e v2 (meta.action + data)
 export interface PipedriveWebhookPayload {
@@ -34,6 +93,7 @@ export interface PipedriveWebhookPayload {
     version?: string;
     entity_id?: string;
     user_id?: string | number;
+    company_id?: string | number;
   };
   previous?: {
     stage_id?: number | string;
@@ -74,6 +134,10 @@ export async function processPipedriveWebhook(
 ) {
   const { eventType } = normalizePipedrivePayload(payload);
 
+  // Identifica a empresa pelo company_id do metadata do webhook
+  const companyId = String(payload.meta?.company_id ?? '');
+  const config    = resolveCompanyConfig(companyId);
+
   let webhookEventId = existingEventId;
 
   if (!webhookEventId) {
@@ -101,7 +165,7 @@ export async function processPipedriveWebhook(
   }
 
   try {
-    const result = await handleDealUpdate(payload);
+    const result = await handleDealUpdate(payload, config);
 
     await prisma.webhookEvent.update({
       where: { id: webhookEventId },
@@ -119,33 +183,30 @@ export async function processPipedriveWebhook(
   }
 }
 
-async function handleDealUpdate(payload: PipedriveWebhookPayload) {
+async function handleDealUpdate(payload: PipedriveWebhookPayload, config: CompanyConfig) {
   const { dealData, dealId } = normalizePipedrivePayload(payload);
 
   if (!dealId) {
     return { skipped: true, reason: 'sem deal ID no payload' };
   }
 
-  const currentStageId = String(dealData.stage_id ?? '');
+  const currentStageId  = String(dealData.stage_id ?? '');
   const previousStageId = String(payload.previous?.stage_id ?? '');
-  const proposalStageId = env.PIPEDRIVE_PROPOSAL_ACCEPTED_STAGE_ID;
-  const prepStageId = env.PIPEDRIVE_CONTRACT_PREPARATION_STAGE_ID;
-  const signingStageId = env.PIPEDRIVE_CONTRACT_SIGNING_STAGE_ID;
   const pipedriveUserId = dealData.owner_id ?? payload.meta?.user_id;
 
-  logger.info(`Pipedrive deal ${dealId}: stage ${previousStageId} → ${currentStageId}`);
+  // Usa os stage IDs da empresa identificada pelo company_id
+  const { proposalStageId, preparationStageId: prepStageId, signingStageId } = config;
 
-  // ── Estágio "Assinatura do Contrato" (57): avança contrato existente ─────
+  logger.info(`[${config.companyName}] Pipedrive deal ${dealId}: stage ${previousStageId} → ${currentStageId}`);
+
   if (signingStageId && currentStageId === signingStageId && previousStageId !== signingStageId) {
-    return handleMoveToSigning(dealId, dealData, pipedriveUserId);
+    return handleMoveToSigning(dealId, dealData, pipedriveUserId, config);
   }
 
-  // ── Estágio "Preparação do Contrato" (56): avança contrato existente ──────
   if (prepStageId && currentStageId === prepStageId && previousStageId !== prepStageId) {
-    return handleMoveToPreparation(dealId, dealData, pipedriveUserId);
+    return handleMoveToPreparation(dealId, dealData, pipedriveUserId, config);
   }
 
-  // ── Estágio "Proposta Aceita" (55): cria novo contrato ───────────────────
   const isProposalAccepted = proposalStageId
     ? currentStageId === proposalStageId && previousStageId !== proposalStageId
     : (dealData.stage_name?.toLowerCase().includes('proposta aceita') ?? false);
@@ -154,20 +215,19 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
     return { skipped: true, reason: `estágio ${currentStageId} não mapeado` };
   }
 
-  // Verifica duplicidade
   const existingDeal = await prisma.pipedriveDeal.findUnique({ where: { externalDealId: dealId } });
   if (existingDeal) {
     logger.info(`Deal Pipedrive ${dealId} já possui tracking — ignorado.`);
     return { skipped: true, reason: 'deal já processado anteriormente' };
   }
 
-  // Busca dados enriquecidos em paralelo: org, pessoa, campos de org, owner e dealFields (para resolver enums)
+  // Busca dados enriquecidos usando o token da empresa correta
   const [org, person, orgFields, ownerUser, dealFields] = await Promise.all([
-    dealData.org_id ? fetchOrganization(dealData.org_id) : Promise.resolve(null),
-    dealData.person_id ? fetchPerson(dealData.person_id) : Promise.resolve(null),
-    fetchOrganizationFields(),
-    dealData.owner_id ? fetchPipedriveUser(dealData.owner_id) : Promise.resolve(null),
-    fetchDealFields(),
+    dealData.org_id ? fetchOrganization(dealData.org_id, config) : Promise.resolve(null),
+    dealData.person_id ? fetchPerson(dealData.person_id, config) : Promise.resolve(null),
+    fetchOrganizationFields(config),
+    dealData.owner_id ? fetchPipedriveUser(dealData.owner_id, config) : Promise.resolve(null),
+    fetchDealFields(config),
   ]);
 
   const titleFallback = (dealData.title ?? '').replace(/\|.*$/, '').trim() || `Lead #${dealId}`;
@@ -215,7 +275,7 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload) {
   return { created: true, externalDealId: dealId };
 }
 
-async function handleMoveToPreparation(dealId: string, dealData: DealData, pipedriveUserId?: string | number) {
+async function handleMoveToPreparation(dealId: string, dealData: DealData, pipedriveUserId?: string | number, config?: CompanyConfig) {
   const existingDeal = await prisma.pipedriveDeal.findUnique({
     where: { externalDealId: dealId },
     include: { contractTracking: { include: { steps: true } } },
@@ -230,7 +290,7 @@ async function handleMoveToPreparation(dealId: string, dealData: DealData, piped
   const { StepStatus } = await import('@prisma/client');
   const { startStep, completeStep } = await import('../../contracts/contracts.service');
 
-  const pipedriveUser = pipedriveUserId ? await fetchPipedriveUser(pipedriveUserId) : null;
+  const pipedriveUser = pipedriveUserId ? await fetchPipedriveUser(pipedriveUserId, config) : null;
   const stepMetadata = { source: 'pipedrive', ...(pipedriveUser && { pipedriveUser: { id: pipedriveUserId, name: pipedriveUser.name } }) };
 
   // PROPOSAL_ACCEPTED agora nasce IN_PROGRESS — precisa concluí-la antes de avançar.
@@ -258,7 +318,7 @@ async function handleMoveToPreparation(dealId: string, dealData: DealData, piped
   return { advanced: true, trackingId: tracking.id, step: 'CONTRACT_PREPARATION' };
 }
 
-async function handleMoveToSigning(dealId: string, dealData: DealData, pipedriveUserId?: string | number) {
+async function handleMoveToSigning(dealId: string, dealData: DealData, pipedriveUserId?: string | number, config?: CompanyConfig) {
   const existingDeal = await prisma.pipedriveDeal.findUnique({
     where: { externalDealId: dealId },
     include: { contractTracking: { include: { steps: true, customer: true } } },
@@ -284,7 +344,7 @@ async function handleMoveToSigning(dealId: string, dealData: DealData, pipedrive
     return { skipped: true, reason: `assinatura já em status ${signingStep.status}` };
   }
 
-  const pipedriveUser = pipedriveUserId ? await fetchPipedriveUser(pipedriveUserId) : null;
+  const pipedriveUser = pipedriveUserId ? await fetchPipedriveUser(pipedriveUserId, config) : null;
   const stepMetadata = { source: 'pipedrive', ...(pipedriveUser && { pipedriveUser: { id: pipedriveUserId, name: pipedriveUser.name } }) };
 
   // Cascata de conclusões: Proposta → Preparação → Assinatura.
@@ -319,7 +379,7 @@ async function handleMoveToSigning(dealId: string, dealData: DealData, pipedrive
   logger.info(`Deal ${dealId}: Assinatura do Contrato iniciada via Pipedrive (estágio ${dealData.stage_id}) por ${pipedriveUser?.name ?? pipedriveUserId ?? 'desconhecido'}`);
 
   // Resolve o enum do Pipedrive (vem como { id, type } no v2) para o label legível
-  const dealFieldsForSigning = await fetchDealFields();
+  const dealFieldsForSigning = await fetchDealFields(config);
   const tipoServico = resolveDealEnumValue(dealData.custom_fields?.[TIPO_SERVICO_FIELD], dealFieldsForSigning, TIPO_SERVICO_FIELD);
   if (tipoServico && !(existingDeal as any).tipoServico) {
     await prisma.pipedriveDeal.update({
