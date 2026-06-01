@@ -160,11 +160,9 @@
   document.getElementById('notif-clear-all').addEventListener('click', async function () {
     if (!confirm('Limpar todas as notificações? Esta ação não pode ser desfeita.')) return;
     await fetch('/notifications/clear-all', { method: 'POST', credentials: 'same-origin' });
-    const list  = document.getElementById('notif-list');
-    const empty = document.getElementById('notif-empty');
-    list.innerHTML = '';
-    empty.style.display = '';
-    list.appendChild(empty);
+    document.getElementById('notif-list').innerHTML =
+      '<div class="text-center text-muted py-4 small" id="notif-empty">' +
+      '<i class="bi bi-bell-slash fs-4 d-block mb-1"></i>Nenhuma notificação</div>';
     updateBadge(0);
     loaded = false;
   });
