@@ -24,6 +24,10 @@
       </div>
       <% } %>
 
+      <%
+        const _email      = typeof email !== 'undefined' && email ? email : (typeof savedEmail !== 'undefined' ? savedEmail : '');
+        const _remembered = typeof savedEmail !== 'undefined' && savedEmail !== '';
+      %>
       <form action="/auth/login" method="POST" autocomplete="on">
         <div class="mb-3">
           <label for="email" class="form-label">E-mail</label>
@@ -34,10 +38,11 @@
               class="form-control"
               id="email"
               name="email"
-              value="<%= typeof email !== 'undefined' ? email : '' %>"
+              autocomplete="username"
+              value="<%= _email %>"
               placeholder="seu@email.com"
               required
-              autofocus
+              autofocus="<%= !_remembered %>"
             />
           </div>
         </div>
@@ -50,13 +55,15 @@
               class="form-control"
               id="password"
               name="password"
+              autocomplete="current-password"
               placeholder="••••••••"
               required
             />
           </div>
         </div>
         <div class="mb-4 d-flex align-items-center">
-          <input type="checkbox" class="form-check-input me-2" id="rememberMe" name="rememberMe" />
+          <input type="checkbox" class="form-check-input me-2" id="rememberMe" name="rememberMe"
+                 <%= _remembered ? 'checked' : '' %> />
           <label class="form-check-label text-muted small" for="rememberMe">Lembrar usuário e senha por 30 dias</label>
         </div>
         <button type="submit" class="btn btn-primary w-100 btn-lg">
