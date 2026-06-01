@@ -32,9 +32,13 @@ const pipelineSteps = h.STEP_NAMES_ORDERED;
             const isDelayed = c.overallStatus === 'DELAYED';
             const currentStepObj = c.steps.find(function(s) { return s.stepName === stepName; });
             const isOverdue = currentStepObj && currentStepObj.dueAt && new Date(currentStepObj.dueAt) < new Date();
+            const cCompany = h.getCompanyInfo(c.pipedriveDeal.companyId);
           %>
           <a href="/contracts/<%= c.id %>" class="pipeline-card <%= isDelayed ? 'delayed' : '' %>">
-            <div class="pipeline-card-name"><%= c.customer.name %></div>
+            <div class="d-flex align-items-start justify-content-between gap-1 mb-1">
+              <div class="pipeline-card-name"><%= c.customer.name %></div>
+              <span class="badge bg-<%= cCompany.css %><%= cCompany.css === 'warning' ? ' text-dark' : '' %>" style="font-size:.6rem;white-space:nowrap"><%= cCompany.name %></span>
+            </div>
             <div class="pipeline-card-deal text-truncate"><%= c.pipedriveDeal.title %></div>
             <div class="pipeline-card-footer">
               <span class="pipeline-card-value"><%= h.formatCurrency(c.pipedriveDeal.value) %></span>
