@@ -5,6 +5,8 @@ import { addBusinessDays, isOverdue } from '../../shared/utils/business-days';
 import { logger } from '../../config/logger';
 import { broadcastEvent } from '../../shared/events/sse.service';
 import { sendRegistrationActionEmail, sendDelayNotificationEmail } from '../email/email.service';
+import { createNotification } from '../notifications/notifications.service';
+import { STEP_LABELS } from '../../shared/utils/format';
 import {
   findAllTrackings,
   findTrackingById,
@@ -193,13 +195,19 @@ export async function createContractFromDeal(params: {
 
   logger.info(`Contrato criado para deal ${params.externalDealId}: tracking ${tracking.id}`);
 
-  // Notifica browsers conectados via SSE
   broadcastEvent('new-contract', {
     trackingId: tracking.id,
     customerName: params.customerName,
     dealTitle: params.title,
     value: params.value,
   });
+
+  createNotification({
+    type: 'new_contract',
+    title: 'Novo contrato',
+    body: `${params.customerName} — ${params.title}`,
+    trackingId: tracking.id,
+  }).catch(() => {});
 
   return tracking;
 }
@@ -350,6 +358,13 @@ export async function startStep(trackingId: string, stepId: string, userId: stri
 
   broadcastEvent('pipeline-updated', { trackingId, step: step.stepName });
 
+  if (!isSystemActor) {
+    const stepLabel = STEP_LABELS[step.stepName as keyof typeof STEP_LABELS] ?? step.stepName;
+    prisma.contractTracking.findUnique({ where: { id: trackingId }, include: { customer: { select: { name: true } } } })
+      .then((t) => createNotification({ type: 'step_started', title: 'Etapa iniciada', body: `${stepLabel} — ${t?.customer.name ?? ''}`, trackingId }))
+      .catch(() => {});
+  }
+
   // Dispara e-mail de notificação ao entrar em Cadastro do Contrato
   if (step.stepName === StepName.CONTRACT_REGISTRATION) {
     sendRegistrationActionEmail(trackingId).catch((err: Error) =>
@@ -457,6 +472,17 @@ export async function completeStep(
 
   logger.info(`Etapa ${step.stepName} concluída por usuário ${userId} no contrato ${trackingId}`);
   broadcastEvent('pipeline-updated', { trackingId, step: step.stepName });
+
+  const stepLabel = STEP_LABELS[step.stepName as keyof typeof STEP_LABELS] ?? step.stepName;
+  if (step.stepName === StepName.CONTRACT_BILLING) {
+    prisma.contractTracking.findUnique({ where: { id: trackingId }, include: { customer: { select: { name: true } } } })
+      .then((t) => createNotification({ type: 'step_completed', title: 'Contrato concluído', body: `Faturamento concluído — ${t?.customer.name ?? ''}`, trackingId }))
+      .catch(() => {});
+  } else {
+    prisma.contractTracking.findUnique({ where: { id: trackingId }, include: { customer: { select: { name: true } } } })
+      .then((t) => createNotification({ type: 'step_completed', title: 'Etapa concluída', body: `${stepLabel} — ${t?.customer.name ?? ''}`, trackingId }))
+      .catch(() => {});
+  }
 }
 
 export async function assignStep(trackingId: string, stepId: string, assignedUserId: string, requesterId: string) {
@@ -575,6 +601,10 @@ export async function recalculateAllDelays() {
         sendDelayNotificationEmail(tracking.id, step.id).catch((err: Error) =>
           logger.error(`[EMAIL] Falha ao notificar atraso (${step.stepName}): ${err.message}`),
         );
+        const delayLabel = STEP_LABELS[step.stepName as keyof typeof STEP_LABELS] ?? step.stepName;
+        prisma.contractTracking.findUnique({ where: { id: tracking.id }, include: { customer: { select: { name: true } } } })
+          .then((t) => createNotification({ type: 'step_delayed', title: 'Etapa em atraso', body: `${delayLabel} — ${t?.customer.name ?? ''}`, trackingId: tracking.id }))
+          .catch(() => {});
       }
     }
     await recalculateOverallStatus(tracking.id);
@@ -652,4 +682,8 @@ export async function markSigningComplete(trackingId: string, externalDocumentId
   await recalculateOverallStatus(trackingId);
   broadcastEvent('pipeline-updated', { trackingId, step: StepName.CONTRACT_SIGNING });
   logger.info(`Assinatura Clicksign processada para tracking ${trackingId}`);
+
+  prisma.contractTracking.findUnique({ where: { id: trackingId }, include: { customer: { select: { name: true } } } })
+    .then((t) => createNotification({ type: 'contract_signed', title: 'Contrato assinado', body: `Todas as assinaturas concluídas — ${t?.customer.name ?? ''}`, trackingId }))
+    .catch(() => {});
 }

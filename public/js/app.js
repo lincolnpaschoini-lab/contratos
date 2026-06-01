@@ -281,6 +281,15 @@ function showWebhookUpdateBanner(count) {
       } catch { /* ignore */ }
     });
 
+    evtSource.addEventListener('notification', function (e) {
+      try {
+        const data = JSON.parse(e.data);
+        if (typeof window._updateNotifBadge === 'function') {
+          window._updateNotifBadge(data.unreadCount ?? 0);
+        }
+      } catch { /* ignore */ }
+    });
+
     evtSource.onerror = function () {
       evtSource.close();
       retryDelay = Math.min(retryDelay * 2, 60000);

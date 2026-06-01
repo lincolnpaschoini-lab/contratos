@@ -14,5 +14,162 @@
     <span class="badge bg-light text-dark border">
       <i class="bi bi-circle-fill text-success me-1" style="font-size:8px"></i>Sistema online
     </span>
+
+    <!-- Sino de notificações -->
+    <div class="dropdown" id="notif-dropdown">
+      <button class="btn btn-sm btn-link text-secondary position-relative p-1"
+              id="notif-btn" data-bs-toggle="dropdown" aria-expanded="false"
+              title="Notificações">
+        <i class="bi bi-bell fs-5"></i>
+        <span id="notif-badge"
+              class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger"
+              style="font-size:.6rem;<%= (unreadNotificationCount || 0) === 0 ? 'display:none' : '' %>">
+          <%= (unreadNotificationCount || 0) > 99 ? '99+' : (unreadNotificationCount || 0) %>
+        </span>
+      </button>
+
+      <div class="dropdown-menu dropdown-menu-end shadow-lg notif-panel p-0"
+           aria-labelledby="notif-btn">
+        <!-- Header do painel -->
+        <div class="d-flex align-items-center justify-content-between px-3 py-2 border-bottom bg-light rounded-top">
+          <span class="fw-semibold small">Notificações</span>
+          <button class="btn btn-link btn-sm text-muted p-0 small" id="notif-mark-all">
+            Marcar todas como lidas
+          </button>
+        </div>
+
+        <!-- Lista (preenchida via JS) -->
+        <div id="notif-list" style="max-height:420px;overflow-y:auto;">
+          <div class="text-center text-muted py-4 small" id="notif-empty" style="display:none">
+            <i class="bi bi-bell-slash fs-4 d-block mb-1"></i>Nenhuma notificação
+          </div>
+          <div class="text-center py-3" id="notif-loading">
+            <div class="spinner-border spinner-border-sm text-secondary"></div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </header>
+
+<script>
+(function () {
+  const ICONS = {
+    new_contract:    { icon: 'bi-file-earmark-plus',   color: '#0d6efd' },
+    step_started:    { icon: 'bi-play-circle-fill',     color: '#d97706' },
+    step_completed:  { icon: 'bi-check-circle-fill',    color: '#16a34a' },
+    step_delayed:    { icon: 'bi-exclamation-triangle-fill', color: '#dc2626' },
+    contract_signed: { icon: 'bi-pen-fill',              color: '#16a34a' },
+  };
+
+  function timeAgo(iso) {
+    const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
+    if (diff < 60)   return 'agora';
+    if (diff < 3600) return Math.floor(diff / 60) + 'm atrás';
+    if (diff < 86400) return Math.floor(diff / 3600) + 'h atrás';
+    return Math.floor(diff / 86400) + 'd atrás';
+  }
+
+  function renderNotif(n) {
+    const cfg   = ICONS[n.type] || { icon: 'bi-bell', color: '#64748b' };
+    const unread = !n.readAt;
+    const url   = n.trackingId ? '/contracts/' + n.trackingId : null;
+
+    return `<div class="notif-item d-flex gap-3 px-3 py-2 border-bottom${unread ? ' notif-unread' : ''}"
+                 data-id="${n.id}" data-url="${url || ''}" role="button">
+      <div class="notif-icon flex-shrink-0" style="color:${cfg.color}">
+        <i class="bi ${cfg.icon} fs-5"></i>
+      </div>
+      <div class="flex-grow-1 overflow-hidden">
+        <div class="d-flex justify-content-between align-items-start gap-1">
+          <span class="small fw-semibold text-truncate">${n.title}</span>
+          <span class="text-muted" style="font-size:.7rem;white-space:nowrap">${timeAgo(n.createdAt)}</span>
+        </div>
+        ${n.body ? `<div class="text-muted text-truncate" style="font-size:.78rem">${n.body}</div>` : ''}
+      </div>
+      ${unread ? '<div class="notif-dot flex-shrink-0"></div>' : ''}
+    </div>`;
+  }
+
+  let loaded = false;
+
+  document.getElementById('notif-btn').addEventListener('click', function () {
+    if (!loaded) loadNotifications();
+  });
+
+  async function loadNotifications() {
+    loaded = true;
+    try {
+      const res  = await fetch('/notifications', { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+      const data = await res.json();
+      renderList(data.notifications);
+      updateBadge(data.unreadCount);
+    } catch {
+      document.getElementById('notif-loading').innerHTML =
+        '<p class="text-danger small text-center py-2 m-0">Erro ao carregar.</p>';
+    }
+  }
+
+  function renderList(notifications) {
+    const list    = document.getElementById('notif-list');
+    const loading = document.getElementById('notif-loading');
+    const empty   = document.getElementById('notif-empty');
+
+    loading.style.display = 'none';
+
+    if (!notifications || notifications.length === 0) {
+      empty.style.display = '';
+      return;
+    }
+
+    list.innerHTML = notifications.map(renderNotif).join('') +
+      '<div class="text-center py-2"><small class="text-muted">Últimas 50 notificações</small></div>';
+
+    list.querySelectorAll('.notif-item').forEach(function (el) {
+      el.addEventListener('click', async function () {
+        const id  = el.dataset.id;
+        const url = el.dataset.url;
+        if (el.classList.contains('notif-unread')) {
+          el.classList.remove('notif-unread');
+          el.querySelector('.notif-dot')?.remove();
+          fetch('/notifications/' + id + '/read', { method: 'POST', credentials: 'same-origin' });
+          const badge = document.getElementById('notif-badge');
+          const cur = parseInt(badge.textContent) || 0;
+          updateBadge(Math.max(0, cur - 1));
+        }
+        if (url) {
+          // Fecha o dropdown antes de navegar
+          bootstrap.Dropdown.getInstance(document.getElementById('notif-btn'))?.hide();
+          window.location.href = url;
+        }
+      });
+    });
+  }
+
+  document.getElementById('notif-mark-all').addEventListener('click', async function () {
+    await fetch('/notifications/read-all', { method: 'POST', credentials: 'same-origin' });
+    document.querySelectorAll('.notif-unread').forEach(function (el) {
+      el.classList.remove('notif-unread');
+      el.querySelector('.notif-dot')?.remove();
+    });
+    updateBadge(0);
+  });
+
+  function updateBadge(count) {
+    const badge = document.getElementById('notif-badge');
+    if (!badge) return;
+    if (count <= 0) {
+      badge.style.display = 'none';
+    } else {
+      badge.style.display = '';
+      badge.textContent = count > 99 ? '99+' : count;
+    }
+  }
+
+  // Atualiza o badge via SSE quando chegar nova notificação
+  window._updateNotifBadge = function (count) {
+    updateBadge(count);
+    loaded = false; // força reload na próxima abertura do dropdown
+  };
+})();
+</script>

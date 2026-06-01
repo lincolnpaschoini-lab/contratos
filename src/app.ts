@@ -32,6 +32,8 @@ import { pipedriveRoutes } from './modules/integrations/pipedrive/pipedrive.rout
 import { clicksignRoutes } from './modules/integrations/clicksign/clicksign.routes';
 import { webhookEventRoutes } from './modules/webhooks/webhooks.routes';
 import { emailActionRoutes } from './modules/email/email-action.routes';
+import { notificationRoutes } from './modules/notifications/notifications.routes';
+import { getUnreadCount } from './modules/notifications/notifications.service';
 
 const app = express();
 
@@ -87,6 +89,16 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(process.cwd(), 'public')));
 app.use(authContextMiddleware);
 
+// Contagem de notificações não lidas disponível em todas as views autenticadas
+app.use(async (req, res, next) => {
+  if (res.locals.currentUser) {
+    try { res.locals.unreadNotificationCount = await getUnreadCount(); } catch { res.locals.unreadNotificationCount = 0; }
+  } else {
+    res.locals.unreadNotificationCount = 0;
+  }
+  next();
+});
+
 // Healthcheck
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString(), env: env.NODE_ENV });
@@ -100,6 +112,7 @@ app.get('/events', requireAuth, (req, res) => {
 
 // Rota pública de ações por e-mail (sem autenticação, antes do rate limit padrão)
 app.use('/acoes', emailActionRoutes);
+app.use('/notifications', notificationRoutes);
 
 app.use(defaultRateLimit);
 

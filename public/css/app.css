@@ -344,6 +344,39 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; }
 
 .btn-xs { padding: .15rem .4rem; font-size: .72rem; line-height: 1.4; }
 
+/* ── Painel de notificações ────────────────────────────────────────── */
+.notif-panel {
+  width: 380px;
+  border-radius: .6rem;
+  overflow: hidden;
+}
+.notif-item {
+  cursor: pointer;
+  transition: background .15s;
+  align-items: flex-start;
+}
+.notif-item:hover { background: #f8fafc; }
+.notif-unread     { background: #eff6ff; }
+.notif-unread:hover { background: #dbeafe; }
+.notif-icon {
+  width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: 2px;
+}
+.notif-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #0d6efd;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+@media (max-width: 480px) {
+  .notif-panel { width: calc(100vw - 24px); }
+}
+
 .test-result { font-size: .85rem; margin-top: .75rem; }
 
 .events-mini-list { display: flex; flex-direction: column; gap: .4rem; }

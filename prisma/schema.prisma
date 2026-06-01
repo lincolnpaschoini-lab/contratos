@@ -129,6 +129,7 @@ model ContractTracking {
   steps         ContractStep[]
   clicksignDocs ClicksignDocument[]
   actionTokens  ActionToken[]
+  notifications Notification[]
 
   @@index([overallStatus])
   @@index([currentStep])
@@ -230,6 +231,22 @@ model SlaRule {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   @@map("sla_rules")
+}
+
+model Notification {
+  id         String    @id @default(uuid())
+  type       String    // new_contract | step_started | step_completed | step_delayed | contract_signed
+  title      String
+  body       String?
+  trackingId String?   @map("tracking_id")
+  readAt     DateTime? @map("read_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  contractTracking ContractTracking? @relation(fields: [trackingId], references: [id], onDelete: SetNull)
+
+  @@index([readAt])
+  @@index([createdAt])
+  @@map("notifications")
 }
 
 model ActionToken {
