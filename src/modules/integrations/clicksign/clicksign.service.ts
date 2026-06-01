@@ -59,37 +59,63 @@ export async function sendContractToClicksign(params: {
   const c = fullTracking?.customer as any;
   const isPF = tipoServico?.includes('PF') ?? false;
 
-  // Mapeamento das variáveis do template Clicksign com os dados do contrato
-  // Os nomes das variáveis devem corresponder exatamente ao que está definido no template
-  const templateData: Record<string, string> = {
+  // Log detalhado dos dados do cliente para facilitar diagnóstico de campos vazios
+  console.log('[CLICKSIGN] Dados do cliente para o template:', JSON.stringify({
+    name:         c?.name,
+    document:     c?.document,
+    email:        c?.email,
+    phone:        c?.phone,
+    contactName:  c?.contactName,
+    contactEmail: c?.contactEmail,
+    contactPhone: c?.contactPhone,
+    address:      c?.address,
+    city:         c?.city,
+    state:        c?.state,
+    zipCode:      c?.zipCode,
+    isPF,
+    tipoServico,
+  }));
+
+  // Para email e telefone: prioriza sempre o contato (person) pois organizações
+  // no Pipedrive raramente têm email/telefone direto cadastrado.
+  const emailValue    = c?.contactEmail || c?.email || '';
+  const telefoneValue = c?.contactPhone || c?.phone || '';
+
+  // Monta os dados completos e depois filtra apenas campos não-vazios.
+  // Enviar campos em branco pode sobrescrever os defaults do template Clicksign.
+  const allTemplateVars: Record<string, string> = {
     // ─── Dados pessoais (Continuado PF) ──────────────────────────
-    'Nome':           isPF ? (c?.contactName ?? c?.name ?? '') : (c?.name ?? ''),
-    'CPF':            isPF ? (c?.document ?? '') : '',
-    'E-mail':         isPF ? (c?.contactEmail ?? c?.email ?? '') : (c?.email ?? c?.contactEmail ?? ''),
-    'Telefone':       c?.contactPhone ?? c?.phone ?? '',
-    'Celular':        c?.contactPhone ?? c?.phone ?? '',
-    'WhatsApp':       c?.contactPhone ?? c?.phone ?? '',
-    // Campos não disponíveis no sistema — ficam em branco para preenchimento manual
-    'RG':             '',
-    'Data_expedição': '',
-    'Data_Nascimento':'',
-    'Estado_Civil':   '',
-    'Nacionalidade':  '',
-    'Profissão':      '',
+    'Nome':            isPF ? (c?.contactName || c?.name || '') : (c?.name || ''),
+    'CPF':             isPF ? (c?.document || '') : '',
+    'E-mail':          emailValue,
+    'Telefone':        telefoneValue,
+    'Celular':         telefoneValue,
+    'WhatsApp':        telefoneValue,
+    'RG':              '',
+    'Data_expedição':  '',
+    'Data_Nascimento': '',
+    'Estado_Civil':    '',
+    'Nacionalidade':   '',
+    'Profissão':       '',
     // ─── Dados da empresa (Continuado PJ) ────────────────────────
-    'Razão_Social':   !isPF ? (c?.name ?? '') : '',
-    'CNPJ':           !isPF ? (c?.document ?? '') : '',
+    'Razão_Social':    !isPF ? (c?.name || '') : '',
+    'CNPJ':            !isPF ? (c?.document || '') : '',
     // ─── Endereço (comum a PF e PJ) ──────────────────────────────
-    'Logradouro':     c?.address ?? '',
-    'Número':         '',
-    'Complemento':    '',
-    'Bairro':         '',
-    'Cidade':         c?.city ?? '',
-    'Estado':         c?.state ?? '',
-    'CEP':            c?.zipCode ?? '',
+    'Logradouro':  c?.address  || '',
+    'Número':      '',
+    'Complemento': '',
+    'Bairro':      '',
+    'Cidade':      c?.city    || '',
+    'Estado':      c?.state   || '',
+    'CEP':         c?.zipCode || '',
   };
 
-  console.log(`[CLICKSIGN] Variáveis do template: ${Object.entries(templateData).filter(([,v]) => v).map(([k,v]) => `${k}=${v}`).join(', ')}`);
+  // Envia somente campos com valor — evita sobrescrever defaults do template com strings vazias
+  const templateData = Object.fromEntries(
+    Object.entries(allTemplateVars).filter(([, v]) => v.trim() !== ''),
+  );
+
+  console.log(`[CLICKSIGN] Variáveis preenchidas (${Object.keys(templateData).length}/${Object.keys(allTemplateVars).length}): ${Object.entries(templateData).map(([k, v]) => `${k}="${v}"`).join(', ')}`);
 
   // 1 — Criar envelope
   const envelopeName = `${tipoServico} — ${customerName}`;
