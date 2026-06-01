@@ -97,6 +97,7 @@ model PipedriveDeal {
   stageName      String  @map("stage_name")
   stageId        String? @map("stage_id")
   tipoServico    String? @map("tipo_servico")
+  companyId      String? @map("company_id")   // Pipedrive meta.company_id — identifica a empresa
   customerId     String? @map("customer_id")
   rawPayload     Json?   @map("raw_payload")
 

@@ -5,9 +5,10 @@ import { PaginationParams, PaginatedResult } from '../../shared/types';
 export interface ContractFilters {
   status?: ContractStatus;
   currentStep?: StepName;
-  delayedStep?: StepName;  // filtra contratos com uma etapa específica em status DELAYED
+  delayedStep?: StepName;
   assignedUserId?: string;
   customerId?: string;
+  companyId?: string;   // Pipedrive company_id para filtrar por empresa
   search?: string;
   dateFrom?: Date;
   dateTo?: Date;
@@ -40,6 +41,7 @@ export async function findAllTrackings(
   }
   if (filters.assignedUserId) where.assignedUserId = filters.assignedUserId;
   if (filters.customerId) where.customerId = filters.customerId;
+  if (filters.companyId) where.pipedriveDeal = { companyId: filters.companyId } as any;
 
   if (filters.dateFrom || filters.dateTo) {
     where.proposalAcceptedAt = {};

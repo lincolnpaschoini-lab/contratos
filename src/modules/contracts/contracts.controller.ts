@@ -14,6 +14,7 @@ import {
   syncContractPipedriveData,
 } from './contracts.service';
 import { ContractStatus, StepName } from '@prisma/client';
+import { env } from '../../config/env';
 
 // Converte string vazia para undefined antes de validar
 const emptyToUndefined = z.preprocess((v) => (v === '' ? undefined : v), z.string().optional());
@@ -26,10 +27,20 @@ const listQuerySchema = z.object({
   delayedStep: z.preprocess((v) => (v === '' ? undefined : v), z.nativeEnum(StepName).optional()),
   assignedUserId: z.preprocess((v) => (v === '' ? undefined : v), z.string().uuid().optional()),
   customerId: z.preprocess((v) => (v === '' ? undefined : v), z.string().uuid().optional()),
+  companyId: emptyToUndefined,
   search: emptyToUndefined,
   dateFrom: emptyToUndefined,
   dateTo: emptyToUndefined,
 });
+
+/** Lista de empresas configuradas para o filtro da UI */
+function getAvailableCompanies() {
+  return [
+    env.PIPEDRIVE_PASCHOINI_COMPANY_ID ? { id: env.PIPEDRIVE_PASCHOINI_COMPANY_ID, name: 'Paschoini' } : null,
+    env.PIPEDRIVE_ATTIVOS_COMPANY_ID   ? { id: env.PIPEDRIVE_ATTIVOS_COMPANY_ID,   name: 'Attivos'   } : null,
+    env.PIPEDRIVE_FOCUS_COMPANY_ID     ? { id: env.PIPEDRIVE_FOCUS_COMPANY_ID,     name: 'Focus'     } : null,
+  ].filter(Boolean) as { id: string; name: string }[];
+}
 
 export async function getContractsList(req: Request, res: Response, next: NextFunction) {
   try {
@@ -42,6 +53,7 @@ export async function getContractsList(req: Request, res: Response, next: NextFu
           delayedStep: query.delayedStep,
           assignedUserId: query.assignedUserId,
           customerId: query.customerId,
+          companyId: query.companyId,
           search: query.search,
           dateFrom: query.dateFrom ? new Date(query.dateFrom) : undefined,
           dateTo: query.dateTo ? new Date(query.dateTo) : undefined,
@@ -60,6 +72,7 @@ export async function getContractsList(req: Request, res: Response, next: NextFu
       title: 'Contratos',
       ...result,
       users,
+      companies: getAvailableCompanies(),
       filters: query,
       StepName,
       ContractStatus,

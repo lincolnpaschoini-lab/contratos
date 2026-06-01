@@ -61,6 +61,7 @@ export async function createContractFromDeal(params: {
   pipedrivePersonRaw?: object;
   pipedriveOwnerName?: string;
   tipoServico?: string;
+  pipedriveCompanyId?: string;
   rawPayload?: object;
   proposalAcceptedAt?: Date;
 }) {
@@ -119,6 +120,7 @@ export async function createContractFromDeal(params: {
       stageName: params.stageName,
       stageId: params.stageId,
       tipoServico: params.tipoServico ?? null,
+      companyId: params.pipedriveCompanyId ?? null,
       customerId: customer.id,
       rawPayload: params.rawPayload ?? {},
     } as any,

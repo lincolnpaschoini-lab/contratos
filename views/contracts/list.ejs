@@ -43,6 +43,15 @@
           <% } %>
         </div>
         <div class="col-6 col-md-2">
+          <label class="form-label small">Empresa</label>
+          <select name="companyId" class="form-select form-select-sm">
+            <option value="">Todas</option>
+            <% (companies || []).forEach(co => { %>
+            <option value="<%= co.id %>" <%= filters.companyId === co.id ? 'selected' : '' %>><%= co.name %></option>
+            <% }); %>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
           <label class="form-label small">Responsável</label>
           <select name="assignedUserId" class="form-select form-select-sm">
             <option value="">Todos</option>

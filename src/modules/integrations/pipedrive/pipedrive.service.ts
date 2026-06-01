@@ -282,6 +282,7 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload, config: Compan
     pipedrivePersonRaw: person ? (person as unknown as object) : undefined,
     pipedriveOwnerName: ownerUser?.name ?? undefined,
     tipoServico: resolveDealEnumValue(dealData.custom_fields?.[TIPO_SERVICO_FIELD], dealFields, TIPO_SERVICO_FIELD) ?? undefined,
+    pipedriveCompanyId: String(payload.meta?.company_id ?? '') || undefined,
   });
 
   logger.info(`Contrato criado para deal Pipedrive ${dealId}: "${dealData.title}" — org: ${org?.name ?? 'sem org'}, pessoa: ${person?.name ?? 'sem pessoa'}`);
