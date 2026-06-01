@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { getNotifications, markAsRead, markAllAsRead, getUnreadCount } from './notifications.service';
+import { getNotifications, markAsRead, markAllAsRead, getUnreadCount, clearAllNotifications } from './notifications.service';
 
 export async function listNotifications(req: Request, res: Response) {
   const notifications = await getNotifications(50);
@@ -20,4 +20,9 @@ export async function readAllNotifications(req: Request, res: Response) {
 export async function countNotifications(req: Request, res: Response) {
   const unreadCount = await getUnreadCount();
   res.json({ unreadCount });
+}
+
+export async function clearNotifications(req: Request, res: Response) {
+  await clearAllNotifications();
+  res.json({ success: true });
 }

@@ -57,3 +57,7 @@ export async function markAllAsRead(): Promise<void> {
     data: { readAt: new Date() },
   });
 }
+
+export async function clearAllNotifications(): Promise<void> {
+  await prisma.notification.deleteMany({});
+}
