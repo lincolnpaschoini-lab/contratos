@@ -76,41 +76,58 @@ export async function sendContractToClicksign(params: {
     tipoServico,
   }));
 
-  // Para email e telefone: prioriza sempre o contato (person) pois organizações
-  // no Pipedrive raramente têm email/telefone direto cadastrado.
-  const emailValue    = c?.contactEmail || c?.email || '';
-  const telefoneValue = c?.contactPhone || c?.phone || '';
+  // Helpers reutilizáveis
+  const emailEmpresa    = c?.email        || c?.contactEmail || '';
+  const emailRepres     = c?.contactEmail || c?.email        || '';
+  const telefoneEmpresa = c?.phone        || c?.contactPhone || '';
+  const telefoneRepres  = c?.contactPhone || c?.phone        || '';
 
-  // Monta os dados completos e depois filtra apenas campos não-vazios.
-  // Enviar campos em branco pode sobrescrever os defaults do template Clicksign.
-  const allTemplateVars: Record<string, string> = {
-    // ─── Dados pessoais (Continuado PF) ──────────────────────────
-    'Nome':            isPF ? (c?.contactName || c?.name || '') : (c?.name || ''),
-    'CPF':             isPF ? (c?.document || '') : '',
-    'E-mail':          emailValue,
-    'Telefone':        telefoneValue,
-    'Celular':         telefoneValue,
-    'WhatsApp':        telefoneValue,
-    'RG':              '',
-    'Data_expedição':  '',
-    'Data_Nascimento': '',
-    'Estado_Civil':    '',
-    'Nacionalidade':   '',
-    'Profissão':       '',
-    // ─── Dados da empresa (Continuado PJ) ────────────────────────
-    'Razão_Social':    !isPF ? (c?.name || '') : '',
-    'CNPJ':            !isPF ? (c?.document || '') : '',
-    // ─── Endereço (comum a PF e PJ) ──────────────────────────────
-    'Logradouro':  c?.address  || '',
-    'Número':      '',
-    'Complemento': '',
-    'Bairro':      '',
-    'Cidade':      c?.city    || '',
-    'Estado':      c?.state   || '',
-    'CEP':         c?.zipCode || '',
-  };
+  // Monta variáveis de acordo com o tipo de contrato.
+  // Os nomes devem ser EXATAMENTE os definidos no template Clicksign (case-sensitive).
+  let allTemplateVars: Record<string, string>;
 
-  // Envia somente campos com valor — evita sobrescrever defaults do template com strings vazias
+  if (!isPF) {
+    // ── Template "Continuado PJ" ─────────────────────────────────
+    allTemplateVars = {
+      // Dados da empresa
+      'NOME_EMPRESA':     c?.name     || '',
+      'CNPJ':             c?.document || '',
+      // Endereço da empresa
+      'Logradouro':       c?.address  || '',
+      'Cidade':           c?.city     || '',
+      'Estado':           c?.state    || '',
+      'CEP_Empresa':      c?.zipCode  || '',
+      // Contato da empresa
+      'E-mail_Empresa':   emailEmpresa,
+      'Telefone_Empresa': telefoneEmpresa,
+      'Celular_Empresa':  telefoneEmpresa,
+      'WhatsApp_Empresa': telefoneEmpresa,
+      // Representante / Procurador
+      'Nome_REPRES':           c?.contactName  || '',
+      'E-mail Representante':  emailRepres,
+      'Telefone_REPRES':       telefoneRepres,
+      'Celular_REPRES':        telefoneRepres,
+      'WhatsApp_REPRES':       telefoneRepres,
+    };
+  } else {
+    // ── Template "Continuado PF" ─────────────────────────────────
+    // ATENÇÃO: verifique os nomes exatos das variáveis no template PF do Clicksign
+    // e ajuste abaixo se necessário.
+    allTemplateVars = {
+      'Nome':       c?.contactName || c?.name || '',
+      'CPF':        c?.document    || '',
+      'E-mail':     emailRepres,
+      'Telefone':   telefoneRepres,
+      'Celular':    telefoneRepres,
+      'WhatsApp':   telefoneRepres,
+      'Logradouro': c?.address || '',
+      'Cidade':     c?.city    || '',
+      'Estado':     c?.state   || '',
+      'CEP':        c?.zipCode || '',
+    };
+  }
+
+  // Envia somente campos com valor — evita sobrescrever defaults do template com string vazia
   const templateData = Object.fromEntries(
     Object.entries(allTemplateVars).filter(([, v]) => v.trim() !== ''),
   );
