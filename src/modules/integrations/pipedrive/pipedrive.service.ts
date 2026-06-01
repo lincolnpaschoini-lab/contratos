@@ -228,8 +228,21 @@ async function handleMoveToPreparation(dealId: string, dealData: DealData, piped
 
   const tracking = existingDeal.contractTracking;
   const { StepStatus } = await import('@prisma/client');
-  const { startStep } = await import('../../contracts/contracts.service');
+  const { startStep, completeStep } = await import('../../contracts/contracts.service');
 
+  const pipedriveUser = pipedriveUserId ? await fetchPipedriveUser(pipedriveUserId) : null;
+  const stepMetadata = { source: 'pipedrive', ...(pipedriveUser && { pipedriveUser: { id: pipedriveUserId, name: pipedriveUser.name } }) };
+
+  // PROPOSAL_ACCEPTED agora nasce IN_PROGRESS — precisa concluí-la antes de avançar.
+  // completeStep auto-inicia CONTRACT_PREPARATION como próxima etapa.
+  const proposalStep = tracking.steps.find((s) => s.stepName === 'PROPOSAL_ACCEPTED');
+  if (proposalStep && (proposalStep.status === StepStatus.IN_PROGRESS || proposalStep.status === StepStatus.DELAYED)) {
+    await completeStep(tracking.id, proposalStep.id, 'system-pipedrive', 'Proposta concluída ao avançar para Preparação via Pipedrive', stepMetadata);
+    logger.info(`Deal ${dealId}: Proposta concluída e Preparação iniciada via Pipedrive`);
+    return { advanced: true, trackingId: tracking.id, step: 'CONTRACT_PREPARATION' };
+  }
+
+  // Fallback: proposta já estava concluída anteriormente
   const prepStep = tracking.steps.find((s) => s.stepName === 'CONTRACT_PREPARATION');
   if (!prepStep) {
     return { skipped: true, reason: 'etapa de preparação não encontrada' };
@@ -240,12 +253,8 @@ async function handleMoveToPreparation(dealId: string, dealData: DealData, piped
     return { skipped: true, reason: `preparação já em status ${prepStep.status}` };
   }
 
-  const pipedriveUser = pipedriveUserId ? await fetchPipedriveUser(pipedriveUserId) : null;
-  const stepMetadata = { source: 'pipedrive', ...(pipedriveUser && { pipedriveUser: { id: pipedriveUserId, name: pipedriveUser.name } }) };
-
   await startStep(tracking.id, prepStep.id, 'system-pipedrive', stepMetadata);
-  logger.info(`Deal ${dealId}: Preparação do Contrato iniciada via Pipedrive (estágio ${dealData.stage_id}) por ${pipedriveUser?.name ?? pipedriveUserId ?? 'desconhecido'}`);
-
+  logger.info(`Deal ${dealId}: Preparação do Contrato iniciada via Pipedrive por ${pipedriveUser?.name ?? pipedriveUserId ?? 'desconhecido'}`);
   return { advanced: true, trackingId: tracking.id, step: 'CONTRACT_PREPARATION' };
 }
 
@@ -278,17 +287,27 @@ async function handleMoveToSigning(dealId: string, dealData: DealData, pipedrive
   const pipedriveUser = pipedriveUserId ? await fetchPipedriveUser(pipedriveUserId) : null;
   const stepMetadata = { source: 'pipedrive', ...(pipedriveUser && { pipedriveUser: { id: pipedriveUserId, name: pipedriveUser.name } }) };
 
+  // Cascata de conclusões: Proposta → Preparação → Assinatura.
+  // PROPOSAL_ACCEPTED agora nasce IN_PROGRESS, então precisa ser concluída primeiro.
+  const proposalStep = tracking.steps.find((s) => s.stepName === 'PROPOSAL_ACCEPTED');
+  if (proposalStep && (proposalStep.status === StepStatus.IN_PROGRESS || proposalStep.status === StepStatus.DELAYED)) {
+    await completeStep(tracking.id, proposalStep.id, 'system-pipedrive', 'Proposta concluída ao avançar para Assinatura via Pipedrive', stepMetadata);
+    // completeStep auto-inicia CONTRACT_PREPARATION
+  }
+
   // Garante que Preparação está concluída antes de iniciar Assinatura.
-  // completeStep auto-inicia a próxima etapa (Assinatura), evitando dupla chamada.
-  const prepStep = tracking.steps.find((s) => s.stepName === 'CONTRACT_PREPARATION');
-  if (prepStep) {
-    if (prepStep.status === StepStatus.PENDING) {
-      await startStep(tracking.id, prepStep.id, 'system-pipedrive', stepMetadata);
-      await completeStep(tracking.id, prepStep.id, 'system-pipedrive', 'Preparação concluída via mudança de estágio no Pipedrive', stepMetadata);
-    } else if (prepStep.status === StepStatus.IN_PROGRESS) {
-      await completeStep(tracking.id, prepStep.id, 'system-pipedrive', 'Preparação concluída via mudança de estágio no Pipedrive', stepMetadata);
+  // Re-busca status atualizado pois pode ter sido auto-iniciada acima.
+  const freshPrep = await prisma.contractStep.findFirst({
+    where: { contractTrackingId: tracking.id, stepName: 'CONTRACT_PREPARATION' },
+  });
+  if (freshPrep) {
+    if (freshPrep.status === StepStatus.PENDING) {
+      await startStep(tracking.id, freshPrep.id, 'system-pipedrive', stepMetadata);
+      await completeStep(tracking.id, freshPrep.id, 'system-pipedrive', 'Preparação concluída via mudança de estágio no Pipedrive', stepMetadata);
+    } else if (freshPrep.status === StepStatus.IN_PROGRESS || freshPrep.status === StepStatus.DELAYED) {
+      await completeStep(tracking.id, freshPrep.id, 'system-pipedrive', 'Preparação concluída via mudança de estágio no Pipedrive', stepMetadata);
     }
-    // Se já estava COMPLETED, CONTRACT_SIGNING continua PENDING e cai no startStep abaixo
+    // Se COMPLETED: CONTRACT_SIGNING continua PENDING e cai no startStep abaixo
   }
 
   // Se completeStep já auto-iniciou a Assinatura, não chama startStep novamente
