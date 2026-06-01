@@ -64,6 +64,6 @@ function isApiRequest(req: Request): boolean {
 }
 
 // Utilitário: assina um JWT para o usuário
-export function signToken(payload: Omit<JwtPayload, 'iat' | 'exp'>): string {
-  return jwt.sign(payload, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN } as jwt.SignOptions);
+export function signToken(payload: Omit<JwtPayload, 'iat' | 'exp'>, expiresIn?: string): string {
+  return jwt.sign(payload, env.JWT_SECRET, { expiresIn: expiresIn ?? env.JWT_EXPIRES_IN } as jwt.SignOptions);
 }

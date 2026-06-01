@@ -7,6 +7,7 @@ import { env } from '../../config/env';
 const loginSchema = z.object({
   email: z.string().email('E-mail inválido.'),
   password: z.string().min(1, 'Senha obrigatória.'),
+  rememberMe: z.string().optional().transform((v) => v === 'on'),
 });
 
 export async function getLogin(req: Request, res: Response) {
@@ -16,14 +17,14 @@ export async function getLogin(req: Request, res: Response) {
 
 export async function postLogin(req: Request, res: Response, next: NextFunction) {
   try {
-    const { email, password } = loginSchema.parse(req.body);
-    const { token } = await loginUser(email, password);
+    const { email, password, rememberMe } = loginSchema.parse(req.body);
+    const { token, cookieMaxAge } = await loginUser(email, password, rememberMe);
 
     res.cookie('token', token, {
       httpOnly: true,
       secure: env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 8 * 60 * 60 * 1000, // 8h
+      maxAge: cookieMaxAge,
     });
 
     const next_url = (req.query.next as string) || '/dashboard';
