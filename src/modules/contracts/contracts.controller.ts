@@ -33,12 +33,22 @@ const listQuerySchema = z.object({
   dateTo: emptyToUndefined,
 });
 
-/** Lista de empresas configuradas para o filtro da UI */
+/** Lista de empresas configuradas para o filtro da UI.
+ *  Usa o company_id do env. Paschoini tem fallback: se PIPEDRIVE_PASCHOINI_COMPANY_ID
+ *  não estiver definido mas o config legado (API token) estiver ativo, ainda aparece na
+ *  lista — porém sem ID válido o filtro não restringe resultados (equivale a "Todas").
+ *  Configure PIPEDRIVE_PASCHOINI_COMPANY_ID para que o filtro funcione corretamente.
+ */
 function getAvailableCompanies() {
+  const paschoiniId = env.PIPEDRIVE_PASCHOINI_COMPANY_ID ?? '';
+
   return [
-    env.PIPEDRIVE_PASCHOINI_COMPANY_ID ? { id: env.PIPEDRIVE_PASCHOINI_COMPANY_ID, name: 'Paschoini' } : null,
-    env.PIPEDRIVE_ATTIVOS_COMPANY_ID   ? { id: env.PIPEDRIVE_ATTIVOS_COMPANY_ID,   name: 'Attivos'   } : null,
-    env.PIPEDRIVE_FOCUS_COMPANY_ID     ? { id: env.PIPEDRIVE_FOCUS_COMPANY_ID,     name: 'Focus'     } : null,
+    // Paschoini sempre aparece (é a empresa primária do sistema)
+    (paschoiniId || env.PIPEDRIVE_API_TOKEN || env.PIPEDRIVE_DOMAIN)
+      ? { id: paschoiniId, name: 'Paschoini' }
+      : null,
+    env.PIPEDRIVE_ATTIVOS_COMPANY_ID ? { id: env.PIPEDRIVE_ATTIVOS_COMPANY_ID, name: 'Attivos' } : null,
+    env.PIPEDRIVE_FOCUS_COMPANY_ID   ? { id: env.PIPEDRIVE_FOCUS_COMPANY_ID,   name: 'Focus'   } : null,
   ].filter(Boolean) as { id: string; name: string }[];
 }
 

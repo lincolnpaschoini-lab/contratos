@@ -147,8 +147,15 @@ export async function processPipedriveWebhook(
   const config    = resolveCompanyConfig(companyId);
 
   if (!config || !config.apiToken) {
-    logger.error(`Pipedrive webhook ignorado: empresa não identificada para company_id "${companyId}". Configure a variável PIPEDRIVE_*_COMPANY_ID correspondente.`);
-    return { skipped: true, reason: `company_id "${companyId}" não mapeado — configure a variável PIPEDRIVE_*_COMPANY_ID` };
+    const reason = `company_id "${companyId}" não mapeado — configure PIPEDRIVE_PASCHOINI_COMPANY_ID (ou _ATTIVOS_ / _FOCUS_)`;
+    logger.error(`Pipedrive webhook ignorado: empresa não identificada para company_id "${companyId}".`);
+    if (existingEventId) {
+      await prisma.webhookEvent.update({
+        where: { id: existingEventId },
+        data: { processed: true, processedAt: new Date(), errorMessage: reason },
+      }).catch(() => {});
+    }
+    return { skipped: true, reason };
   }
 
   let webhookEventId = existingEventId;
