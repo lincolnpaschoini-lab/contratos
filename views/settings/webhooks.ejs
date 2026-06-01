@@ -44,6 +44,7 @@
       <thead class="table-light">
         <tr>
           <th>Origem</th>
+          <th>Empresa</th>
           <th>Tipo de Evento</th>
           <th>Status</th>
           <th>Recebido em</th>
@@ -54,11 +55,26 @@
       </thead>
       <tbody>
         <% events.forEach(ev => { %>
+        <%
+          const whCompanyId = ev.source === 'pipedrive'
+            ? (ev.payload?.meta?.company_id ?? null)
+            : null;
+          const whCompany = whCompanyId ? h.getCompanyInfo(whCompanyId) : null;
+        %>
         <tr class="<%= !ev.processed && ev.errorMessage ? 'table-danger-subtle' : '' %>">
           <td>
             <span class="badge bg-<%= ev.source === 'pipedrive' ? 'primary' : 'info' %>">
               <%= ev.source %>
             </span>
+          </td>
+          <td>
+            <% if (whCompany) { %>
+            <span class="badge bg-<%= whCompany.css %><%= whCompany.css === 'warning' ? ' text-dark' : '' %>">
+              <%= whCompany.name %>
+            </span>
+            <% } else { %>
+            <span class="text-muted">—</span>
+            <% } %>
           </td>
           <td><code><%= ev.eventType %></code></td>
           <td>

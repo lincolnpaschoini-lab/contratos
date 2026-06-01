@@ -414,6 +414,33 @@ async function handleMoveToSigning(dealId: string, dealData: DealData, pipedrive
   return { advanced: true, trackingId: tracking.id, step: 'CONTRACT_SIGNING' };
 }
 
+// ─── Helper público: nome da empresa pelo company_id do Pipedrive ────────────
+
+const COMPANY_CSS: Record<string, string> = {
+  Paschoini: 'primary',
+  Attivos:   'success',
+  Focus:     'warning',
+};
+
+export function getCompanyInfo(companyId: string | number | null | undefined): { name: string; css: string } {
+  const id = companyId ? String(companyId) : '';
+
+  if (id && env.PIPEDRIVE_PASCHOINI_COMPANY_ID && id === env.PIPEDRIVE_PASCHOINI_COMPANY_ID) {
+    return { name: 'Paschoini', css: 'primary' };
+  }
+  if (id && env.PIPEDRIVE_ATTIVOS_COMPANY_ID && id === env.PIPEDRIVE_ATTIVOS_COMPANY_ID) {
+    return { name: 'Attivos', css: 'success' };
+  }
+  if (id && env.PIPEDRIVE_FOCUS_COMPANY_ID && id === env.PIPEDRIVE_FOCUS_COMPANY_ID) {
+    return { name: 'Focus', css: 'warning' };
+  }
+  // Sem company_id mapeado mas com config legado → assume Paschoini
+  if (!id || (!env.PIPEDRIVE_PASCHOINI_COMPANY_ID && (env.PIPEDRIVE_API_TOKEN || env.PIPEDRIVE_DOMAIN))) {
+    return { name: 'Paschoini', css: 'primary' };
+  }
+  return { name: `ID: ${id}`, css: 'secondary' };
+}
+
 export function verifyPipedriveSignature(rawBody: string, signature: string): boolean {
   if (!env.PIPEDRIVE_WEBHOOK_SECRET) return true;
   const crypto = require('crypto');

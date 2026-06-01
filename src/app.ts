@@ -34,6 +34,7 @@ import { webhookEventRoutes } from './modules/webhooks/webhooks.routes';
 import { emailActionRoutes } from './modules/email/email-action.routes';
 import { notificationRoutes } from './modules/notifications/notifications.routes';
 import { getUnreadCount } from './modules/notifications/notifications.service';
+import { getCompanyInfo } from './modules/integrations/pipedrive/pipedrive.service';
 
 const app = express();
 
@@ -82,6 +83,7 @@ app.use((req, res, next) => {
     formatDate, formatDateTime, formatRelative, formatCurrency,
     STEP_LABELS, STEP_STATUS_LABELS, CONTRACT_STATUS_LABELS,
     STEP_STATUS_CSS, CONTRACT_STATUS_CSS, stepOrder, STEP_NAMES_ORDERED,
+    getCompanyInfo,
   };
   next();
 });

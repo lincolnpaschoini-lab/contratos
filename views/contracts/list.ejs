@@ -89,8 +89,15 @@
           const completedCount = c.steps.filter(s => s.status === 'COMPLETED').length;
           const progressPct = Math.round((completedCount / 5) * 100);
         %>
+        <%
+          const cCompanyId = (c.pipedriveDeal?.rawPayload as any)?.meta?.company_id ?? null;
+          const cCompany   = h.getCompanyInfo(cCompanyId);
+        %>
         <tr class="<%= c.overallStatus === 'DELAYED' ? 'table-danger-subtle' : '' %>">
           <td>
+            <div class="d-flex align-items-center gap-1 mb-1">
+              <span class="badge bg-<%= cCompany.css %><%= cCompany.css === 'warning' ? ' text-dark' : '' %>" style="font-size:.65rem"><%= cCompany.name %></span>
+            </div>
             <div class="fw-semibold"><%= c.customer.name %></div>
             <div class="text-muted small"><%= c.customer.document || '' %></div>
           </td>
