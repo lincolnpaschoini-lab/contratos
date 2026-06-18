@@ -1,17 +1,46 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { setFlash } from '../../shared/middlewares/flash.middleware';
-import { getAllSlaRules, updateSlaRule } from './settings.service';
+import { getAllSlaRules, updateSlaRule, upsertCompanySlaRule } from './settings.service';
+import { StepName } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { recalculateAllDelays } from '../contracts/contracts.service';
 import { processPipedriveWebhook } from '../integrations/pipedrive/pipedrive.service';
 import { processClicksignWebhook } from '../integrations/clicksign/clicksign.service';
 import { env } from '../../config/env';
 
+const STEP_ORDER_LIST: StepName[] = [
+  StepName.PROPOSAL_ACCEPTED,
+  StepName.CONTRACT_PREPARATION,
+  StepName.CONTRACT_SIGNING,
+  StepName.CONTRACT_REGISTRATION,
+  StepName.CONTRACT_BILLING,
+];
+
 export async function getSlaSettings(req: Request, res: Response, next: NextFunction) {
   try {
     const rules = await getAllSlaRules();
-    res.render('settings/sla', { title: 'Configurações de SLA', rules });
+
+    const companies = [
+      { name: 'Paschoini', companyId: env.PIPEDRIVE_PASCHOINI_COMPANY_ID },
+      { name: 'Focus',     companyId: env.PIPEDRIVE_FOCUS_COMPANY_ID },
+      { name: 'Attivos',   companyId: env.PIPEDRIVE_ATTIVOS_COMPANY_ID },
+    ].filter((c): c is { name: string; companyId: string } => !!c.companyId);
+
+    // Organiza: { [stepName]: { global: SlaRule | null; byCompany: { [companyId]: SlaRule } } }
+    const ruleMap: Record<string, { global: any; byCompany: Record<string, any> }> = {};
+    for (const step of STEP_ORDER_LIST) {
+      ruleMap[step] = { global: null, byCompany: {} };
+    }
+    for (const rule of rules) {
+      if (rule.companyId === null) {
+        ruleMap[rule.stepName].global = rule;
+      } else {
+        ruleMap[rule.stepName].byCompany[rule.companyId] = rule;
+      }
+    }
+
+    res.render('settings/sla', { title: 'Configurações de SLA', ruleMap, companies, STEP_ORDER_LIST });
   } catch (err) {
     next(err);
   }
@@ -32,14 +61,21 @@ export async function postRecalculateAll(req: Request, res: Response, next: Next
 
 export async function postUpdateSla(req: Request, res: Response, next: NextFunction) {
   try {
-    const { businessDays, active } = z
+    const { businessDays, active, notifyEmails, notifyOnNewLead } = z
       .object({
         businessDays: z.coerce.number().min(0).max(30),
         active: z.string().optional().transform((v) => v !== 'false'),
+        notifyEmails: z.string().optional().transform((v) => {
+          if (!v) return null;
+          // normaliza: uma por linha ou separadas por vírgula → armazena como CSV
+          const emails = v.split(/[\n,]/).map((e) => e.trim()).filter(Boolean);
+          return emails.length > 0 ? emails.join(',') : null;
+        }),
+        notifyOnNewLead: z.string().optional().transform((v) => v === 'true'),
       })
       .parse(req.body);
 
-    const rule = await updateSlaRule(req.params.id, businessDays, active);
+    const rule = await updateSlaRule(req.params.id, businessDays, active, notifyEmails, notifyOnNewLead);
 
     if (req.headers.accept?.includes('application/json')) {
       return res.json({ success: true, data: rule });
@@ -51,6 +87,37 @@ export async function postUpdateSla(req: Request, res: Response, next: NextFunct
       return res.status(400).json({ success: false, message: err.message });
     }
     setFlash(res, 'error', err.message ?? 'Erro ao atualizar SLA.');
+    res.redirect('/settings/sla');
+  }
+}
+
+export async function postUpsertCompanySla(req: Request, res: Response, next: NextFunction) {
+  try {
+    const stepName = req.params.stepName as StepName;
+    if (!STEP_ORDER_LIST.includes(stepName)) {
+      throw new Error('Etapa inválida.');
+    }
+
+    const { companyId, businessDays, active, notifyEmails, notifyOnNewLead } = z
+      .object({
+        companyId: z.string().min(1, 'Empresa obrigatória.'),
+        businessDays: z.coerce.number().min(0).max(30),
+        active: z.string().optional().transform((v) => v !== 'false'),
+        notifyEmails: z.string().optional().transform((v) => {
+          if (!v) return null;
+          const emails = v.split(/[\n,]/).map((e) => e.trim()).filter(Boolean);
+          return emails.length > 0 ? emails.join(',') : null;
+        }),
+        notifyOnNewLead: z.string().optional().transform((v) => v === 'true'),
+      })
+      .parse(req.body);
+
+    await upsertCompanySlaRule(stepName, companyId, { businessDays, active, notifyEmails, notifyOnNewLead });
+
+    setFlash(res, 'success', 'Configuração por empresa salva com sucesso.');
+    res.redirect('/settings/sla');
+  } catch (err: any) {
+    setFlash(res, 'error', err.message ?? 'Erro ao salvar configuração por empresa.');
     res.redirect('/settings/sla');
   }
 }

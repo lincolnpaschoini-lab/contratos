@@ -1,7 +1,7 @@
 <div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-2">
   <div>
     <h2 class="page-title">Configurações de SLA</h2>
-    <p class="text-muted mb-0">Define o prazo em dias úteis para cada etapa do fluxo contratual.</p>
+    <p class="text-muted mb-0">Define prazos e notificações por etapa. Configure regras globais (padrão) ou sobreponha por empresa.</p>
   </div>
   <form method="POST" action="/settings/recalculate">
     <button type="submit" class="btn btn-sm btn-outline-warning">
@@ -10,57 +10,133 @@
   </form>
 </div>
 
-<div class="card">
-  <div class="card-header">
-    <i class="bi bi-sliders me-2"></i>Regras de SLA por Etapa
-  </div>
-  <div class="table-responsive">
-    <table class="table mb-0">
-      <thead class="table-light">
-        <tr>
-          <th>Etapa</th>
-          <th>Dias Úteis</th>
-          <th>Ativo</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody>
-        <% rules.forEach(rule => { %>
-        <tr>
-          <td>
-            <strong><%= h.STEP_LABELS[rule.stepName] || rule.stepName %></strong>
-          </td>
-          <td>
-            <form method="POST" action="/settings/sla/<%= rule.id %>" class="d-flex align-items-center gap-2">
-              <input type="number" name="businessDays" value="<%= rule.businessDays %>"
-                     min="0" max="30" class="form-control form-control-sm" style="width:80px" />
-              <select name="active" class="form-select form-select-sm" style="width:110px">
-                <option value="true" <%= rule.active ? 'selected' : '' %>>Ativo</option>
-                <option value="false" <%= !rule.active ? 'selected' : '' %>>Inativo</option>
-              </select>
-              <button type="submit" class="btn btn-sm btn-primary">
-                <i class="bi bi-save me-1"></i>Salvar
-              </button>
-            </form>
-          </td>
-          <td>
-            <span class="badge bg-<%= rule.active ? 'success' : 'secondary' %>">
-              <%= rule.active ? 'Ativo' : 'Inativo' %>
+<%
+  // Etapas na ordem do fluxo
+  const STEP_NAMES = [
+    'PROPOSAL_ACCEPTED',
+    'CONTRACT_PREPARATION',
+    'CONTRACT_SIGNING',
+    'CONTRACT_REGISTRATION',
+    'CONTRACT_BILLING'
+  ];
+
+  // Helper: formata lista de e-mails CSV → um por linha para o textarea
+  function fmtEmails(csv) {
+    if (!csv) return '';
+    return csv.split(',').map(e => e.trim()).filter(Boolean).join('\n');
+  }
+%>
+
+<div class="accordion" id="slaAccordion">
+  <% STEP_NAMES.forEach(function(stepName, idx) {
+    const entry     = ruleMap[stepName] || { global: null, byCompany: {} };
+    const stepLabel = h.STEP_LABELS[stepName] || stepName;
+    const global    = entry.global;
+    const hasCompanyOverrides = companies.some(function(c) { return !!entry.byCompany[c.companyId]; });
+  %>
+  <div class="accordion-item border mb-2 rounded shadow-sm overflow-hidden">
+
+    <!-- Cabeçalho do accordion -->
+    <h2 class="accordion-header">
+      <button class="accordion-button collapsed py-3" type="button"
+              data-bs-toggle="collapse" data-bs-target="#step-<%= idx %>"
+              aria-expanded="false">
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <strong><%= stepLabel %></strong>
+          <% if (global) { %>
+            <span class="badge bg-<%= global.active ? 'success' : 'secondary' %>">
+              <%= global.active ? 'Ativo' : 'Inativo' %>
             </span>
-          </td>
-          <td>
             <span class="badge bg-light text-dark border">
-              Atualizado: <%= h.formatDate(rule.updatedAt) %>
+              Global: <%= global.businessDays %> dia<%= global.businessDays !== 1 ? 's' : '' %> útil<%= global.businessDays !== 1 ? 'eis' : '' %>
             </span>
-          </td>
-        </tr>
-        <% }); %>
-      </tbody>
-    </table>
+          <% } %>
+          <% if (hasCompanyOverrides) { %>
+            <span class="badge bg-info text-white"><i class="bi bi-building me-1"></i>Tem overrides por empresa</span>
+          <% } %>
+          <% if (global && global.notifyOnNewLead) { %>
+            <span class="badge bg-primary text-white"><i class="bi bi-bell-fill me-1"></i>Notifica novo lead</span>
+          <% } %>
+        </div>
+      </button>
+    </h2>
+
+    <!-- Corpo do accordion -->
+    <div id="step-<%= idx %>" class="accordion-collapse collapse">
+      <div class="accordion-body p-0">
+
+        <!-- Abas de empresa -->
+        <ul class="nav nav-tabs px-3 pt-3 bg-light border-bottom" id="tabs-<%= idx %>" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-global-<%= idx %>-btn"
+                    data-bs-toggle="tab" data-bs-target="#tab-global-<%= idx %>"
+                    type="button" role="tab">
+              <i class="bi bi-globe2 me-1"></i>Global (padrão)
+            </button>
+          </li>
+          <% companies.forEach(function(company) { %>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-<%= idx %>-<%= company.companyId %>-btn"
+                    data-bs-toggle="tab" data-bs-target="#tab-<%= idx %>-<%= company.companyId %>"
+                    type="button" role="tab">
+              <%= company.name %>
+              <% if (entry.byCompany[company.companyId]) { %>
+                <span class="badge bg-success ms-1" title="Override configurado">✓</span>
+              <% } %>
+            </button>
+          </li>
+          <% }); %>
+        </ul>
+
+        <div class="tab-content p-3 bg-light">
+
+          <!-- ── Aba Global ─────────────────────────────────────── -->
+          <div class="tab-pane fade show active" id="tab-global-<%= idx %>" role="tabpanel">
+            <% if (global) { %>
+            <form method="POST" action="/settings/sla/<%= global.id %>">
+              <%- include('../partials/sla-rule-fields', { rule: global, hint: 'Aplica-se a todos os contratos sem override de empresa específica.' }) %>
+            </form>
+            <% } else { %>
+            <div class="alert alert-warning mb-0">
+              <i class="bi bi-exclamation-triangle me-2"></i>Regra global não encontrada para esta etapa. Execute a reconciliação ou contate o suporte.
+            </div>
+            <% } %>
+          </div>
+
+          <!-- ── Abas por Empresa ────────────────────────────────── -->
+          <% companies.forEach(function(company) {
+            const companyRule = entry.byCompany[company.companyId] || null;
+          %>
+          <div class="tab-pane fade" id="tab-<%= idx %>-<%= company.companyId %>" role="tabpanel">
+            <form method="POST" action="/settings/sla/step/<%= stepName %>">
+              <input type="hidden" name="companyId" value="<%= company.companyId %>" />
+              <% if (!companyRule) { %>
+              <div class="alert alert-info mb-3 small">
+                <i class="bi bi-info-circle me-2"></i>
+                Nenhum override configurado para <strong><%= company.name %></strong> nesta etapa.
+                Preencha abaixo para criar um. Campos em branco herdam da regra <strong>Global</strong>.
+              </div>
+              <% } %>
+              <%- include('../partials/sla-rule-fields', {
+                rule: companyRule || { businessDays: global ? global.businessDays : 1, active: true, notifyEmails: null, notifyOnNewLead: false },
+                hint: 'Override específico para contratos da empresa ' + company.name + '. Sobrescreve a regra global nesta etapa.'
+              }) %>
+            </form>
+          </div>
+          <% }); %>
+
+        </div><!-- /tab-content -->
+      </div>
+    </div>
   </div>
+  <% }); %>
 </div>
 
 <div class="alert alert-info mt-3 small">
   <i class="bi bi-info-circle me-2"></i>
-  Os SLAs definem quantos dias úteis cada etapa tem para ser concluída. Contratos com etapas que excedem o prazo são marcados automaticamente como <strong>Atrasado</strong>.
+  <strong>Como funciona:</strong> O sistema usa a regra da <strong>empresa específica</strong> do contrato quando disponível; caso contrário usa a regra <strong>Global</strong>.
+  Os e-mails configurados por etapa substituem a variável de ambiente <code>DELAY_NOTIFY_EMAILS</code>.
+  <% if (companies.length === 0) { %>
+  <br/><strong class="text-warning">⚠ Nenhuma empresa mapeada nas variáveis de ambiente (PIPEDRIVE_PASCHOINI_COMPANY_ID, PIPEDRIVE_FOCUS_COMPANY_ID, PIPEDRIVE_ATTIVOS_COMPANY_ID).</strong>
+  <% } %>
 </div>

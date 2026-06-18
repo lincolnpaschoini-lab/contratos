@@ -46,11 +46,12 @@ async function main() {
   ];
 
   for (const sla of slaDefaults) {
-    await prisma.slaRule.upsert({
-      where: { stepName: sla.stepName },
-      update: { businessDays: sla.businessDays },
-      create: sla,
-    });
+    const existing = await prisma.slaRule.findFirst({ where: { stepName: sla.stepName, companyId: null } });
+    if (existing) {
+      await prisma.slaRule.update({ where: { id: existing.id }, data: { businessDays: sla.businessDays } });
+    } else {
+      await prisma.slaRule.create({ data: { ...sla, companyId: null } });
+    }
   }
   console.log('Regras de SLA criadas/atualizadas.');
 

@@ -223,14 +223,18 @@ model WebhookEvent {
 }
 
 model SlaRule {
-  id           String   @id @default(uuid())
-  stepName     StepName @unique @map("step_name")
-  businessDays Int      @default(1) @map("business_days")
-  active       Boolean  @default(true)
+  id              String   @id @default(uuid())
+  stepName        StepName @map("step_name")
+  companyId       String?  @map("company_id")
+  businessDays    Int      @default(1) @map("business_days")
+  active          Boolean  @default(true)
+  notifyEmails    String?  @map("notify_emails")
+  notifyOnNewLead Boolean  @default(false) @map("notify_on_new_lead")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@unique([stepName, companyId])
   @@map("sla_rules")
 }
 

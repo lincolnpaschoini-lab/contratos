@@ -1,0 +1,84 @@
+<%
+  // Locals esperados: rule (objeto com campos), hint (string opcional)
+  const emailsFormatted = (rule.notifyEmails || '').split(',').map(function(e) { return e.trim(); }).filter(Boolean).join('\n');
+%>
+
+<div class="row g-3">
+
+  <!-- Prazo de SLA -->
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-header py-2">
+        <i class="bi bi-sliders me-2"></i><strong>Prazo de SLA</strong>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">Dias Úteis</label>
+          <input type="number" name="businessDays" value="<%= rule.businessDays %>"
+                 min="0" max="30" class="form-control" />
+          <div class="form-text">Número de dias úteis para concluir esta etapa.</div>
+        </div>
+        <div class="mb-0">
+          <label class="form-label small fw-semibold">Status</label>
+          <select name="active" class="form-select">
+            <option value="true" <%= rule.active ? 'selected' : '' %>>Ativo</option>
+            <option value="false" <%= !rule.active ? 'selected' : '' %>>Inativo</option>
+          </select>
+        </div>
+      </div>
+      <% if (rule.updatedAt) { %>
+      <div class="card-footer bg-transparent text-muted small">
+        Atualizado em: <%= h.formatDate(rule.updatedAt) %>
+      </div>
+      <% } %>
+    </div>
+  </div>
+
+  <!-- Notificações por E-mail -->
+  <div class="col-md-8">
+    <div class="card h-100">
+      <div class="card-header py-2">
+        <i class="bi bi-envelope-at me-2"></i><strong>Notificações por E-mail</strong>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <label class="form-label small fw-semibold">
+            E-mails que recebem alertas de atraso nesta etapa
+          </label>
+          <textarea name="notifyEmails" class="form-control font-monospace"
+                    rows="3"
+                    placeholder="email1@dominio.com&#10;email2@dominio.com"
+          ><%= emailsFormatted %></textarea>
+          <div class="form-text">
+            Um e-mail por linha. Se vazio, usa a variável de ambiente <code>DELAY_NOTIFY_EMAILS</code>.
+          </div>
+        </div>
+        <div class="mb-0">
+          <div class="form-check form-switch">
+            <input class="form-check-input" type="checkbox"
+                   role="switch"
+                   name="notifyOnNewLead" value="true"
+                   <%= rule.notifyOnNewLead ? 'checked' : '' %> />
+            <label class="form-check-label fw-semibold">
+              Notificar responsáveis quando novo lead entrar nesta etapa
+            </label>
+          </div>
+          <div class="form-text ms-4">
+            Se marcado, os e-mails acima recebem notificação assim que um contrato entrar nesta etapa.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<% if (typeof hint !== 'undefined' && hint) { %>
+<p class="text-muted small mt-2 mb-0"><i class="bi bi-info-circle me-1"></i><%= hint %></p>
+<% } %>
+
+<div class="mt-3 d-flex justify-content-end">
+  <button type="submit" class="btn btn-primary">
+    <i class="bi bi-save me-1"></i>Salvar
+  </button>
+</div>

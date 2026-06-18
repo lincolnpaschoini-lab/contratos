@@ -4,7 +4,7 @@ import { AppError } from '../../shared/middlewares/error.middleware';
 import { addBusinessDays, isOverdue } from '../../shared/utils/business-days';
 import { logger } from '../../config/logger';
 import { broadcastEvent } from '../../shared/events/sse.service';
-import { sendRegistrationActionEmail, sendDelayNotificationEmail } from '../email/email.service';
+import { sendRegistrationActionEmail, sendDelayNotificationEmail, sendNewLeadNotificationEmail } from '../email/email.service';
 import { createNotification } from '../notifications/notifications.service';
 import { STEP_LABELS } from '../../shared/utils/format';
 import {
@@ -28,9 +28,14 @@ const STEP_ORDER: StepName[] = [
   StepName.CONTRACT_BILLING,
 ];
 
-async function getSlaMap(): Promise<Map<StepName, number>> {
-  const rules = await prisma.slaRule.findMany({ where: { active: true } });
-  return new Map(rules.map((r) => [r.stepName, r.businessDays]));
+async function getSlaMap(companyId?: string | null): Promise<Map<StepName, number>> {
+  const globalRules = await prisma.slaRule.findMany({ where: { active: true, companyId: null } });
+  const map = new Map(globalRules.map((r) => [r.stepName, r.businessDays]));
+  if (companyId) {
+    const companyRules = await prisma.slaRule.findMany({ where: { active: true, companyId } });
+    for (const r of companyRules) map.set(r.stepName, r.businessDays);
+  }
+  return map;
 }
 
 // ─── Criação via Pipedrive ────────────────────────────────────────────────────
@@ -66,7 +71,7 @@ export async function createContractFromDeal(params: {
   proposalAcceptedAt?: Date;
 }) {
   const now = params.proposalAcceptedAt ?? new Date();
-  const slaMap = await getSlaMap();
+  const slaMap = await getSlaMap(params.pipedriveCompanyId);
 
   // Upsert cliente com todos os dados disponíveis
   const customer = await prisma.customer.upsert({
@@ -333,7 +338,11 @@ export async function startStep(trackingId: string, stepId: string, userId: stri
     }
   }
 
-  const slaMap = await getSlaMap();
+  const trackingForCompany = await prisma.contractTracking.findUnique({
+    where: { id: trackingId },
+    select: { pipedriveDeal: { select: { companyId: true } } },
+  });
+  const slaMap = await getSlaMap(trackingForCompany?.pipedriveDeal?.companyId);
   const dueAt = addBusinessDays(new Date(), slaMap.get(step.stepName) ?? 1);
 
   const isSystemActor = !userId || userId.startsWith('system-');
@@ -373,6 +382,11 @@ export async function startStep(trackingId: string, stepId: string, userId: stri
       logger.error(`[EMAIL] Falha ao notificar cadastro (startStep): ${err.message}`),
     );
   }
+
+  // Notifica responsáveis quando novo lead entra em qualquer etapa (se configurado na regra de SLA)
+  sendNewLeadNotificationEmail(trackingId, step.stepName).catch((err: Error) =>
+    logger.error(`[EMAIL] Falha ao notificar novo lead (${step.stepName}): ${err.message}`),
+  );
 }
 
 export async function completeStep(
@@ -432,7 +446,11 @@ export async function completeStep(
 
     if (nextStep && nextStep.status === StepStatus.PENDING) {
       // Próxima etapa ainda não iniciada — inicia automaticamente com SLA
-      const slaMap = await getSlaMap();
+      const trackingForCompany = await prisma.contractTracking.findUnique({
+        where: { id: trackingId },
+        select: { pipedriveDeal: { select: { companyId: true } } },
+      });
+      const slaMap = await getSlaMap(trackingForCompany?.pipedriveDeal?.companyId);
       const dueAt = addBusinessDays(new Date(), slaMap.get(nextStepName) ?? 1);
 
       await createStepHistory({
@@ -456,6 +474,11 @@ export async function completeStep(
           logger.error(`[EMAIL] Falha ao notificar cadastro (completeStep auto-start): ${err.message}`),
         );
       }
+
+      // Notifica responsáveis quando novo lead entra na próxima etapa (se configurado)
+      sendNewLeadNotificationEmail(trackingId, nextStepName).catch((err: Error) =>
+        logger.error(`[EMAIL] Falha ao notificar novo lead auto-start (${nextStepName}): ${err.message}`),
+      );
     }
 
     // Sempre avança o currentStep do tracking ao concluir uma etapa,
@@ -655,7 +678,11 @@ export async function markSigningComplete(trackingId: string, externalDocumentId
   });
 
   if (registrationStep && registrationStep.status === StepStatus.PENDING) {
-    const slaMap = await getSlaMap();
+    const trackingForCompany = await prisma.contractTracking.findUnique({
+      where: { id: trackingId },
+      select: { pipedriveDeal: { select: { companyId: true } } },
+    });
+    const slaMap = await getSlaMap(trackingForCompany?.pipedriveDeal?.companyId);
     const dueAt = addBusinessDays(new Date(), slaMap.get(StepName.CONTRACT_REGISTRATION) ?? 1);
 
     await createStepHistory({

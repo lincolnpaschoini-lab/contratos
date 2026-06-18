@@ -72,20 +72,10 @@ export async function sendRegistrationActionEmail(trackingId: string): Promise<v
 
 // ─── Notificação de atraso ────────────────────────────────────────────────────
 
-/** Dispara alerta de atraso para todos os e-mails configurados em DELAY_NOTIFY_EMAILS. */
+/** Dispara alerta de atraso. Usa os e-mails configurados na regra de SLA da etapa; cai no DELAY_NOTIFY_EMAILS como fallback. */
 export async function sendDelayNotificationEmail(trackingId: string, stepId: string): Promise<void> {
   if (!env.GRAPH_TENANT_ID || !env.GRAPH_CLIENT_ID || !env.GRAPH_CLIENT_SECRET) {
     logger.warn('[EMAIL] Alerta de atraso ignorado — credenciais Graph não configuradas');
-    return;
-  }
-
-  const recipients = (env.DELAY_NOTIFY_EMAILS ?? '')
-    .split(',')
-    .map((e) => e.trim())
-    .filter(Boolean);
-
-  if (recipients.length === 0) {
-    logger.warn('[EMAIL] Alerta de atraso ignorado — DELAY_NOTIFY_EMAILS não configurado');
     return;
   }
 
@@ -113,6 +103,24 @@ export async function sendDelayNotificationEmail(trackingId: string, stepId: str
     return;
   }
 
+  // Busca e-mails: regra específica da empresa → regra global → env var
+  const companyId = (tracking as any).pipedriveDeal?.companyId ?? null;
+  const specificRule = companyId
+    ? await prisma.slaRule.findFirst({ where: { stepName: delayedStep.stepName, companyId } })
+    : null;
+  const globalRule = await prisma.slaRule.findFirst({ where: { stepName: delayedStep.stepName, companyId: null } });
+  const slaRule = specificRule ?? globalRule;
+  const ruleEmails = slaRule?.notifyEmails
+    ? slaRule.notifyEmails.split(',').map((e) => e.trim()).filter(Boolean)
+    : [];
+  const fallbackEmails = (env.DELAY_NOTIFY_EMAILS ?? '').split(',').map((e) => e.trim()).filter(Boolean);
+  const recipients = ruleEmails.length > 0 ? ruleEmails : fallbackEmails;
+
+  if (recipients.length === 0) {
+    logger.warn(`[EMAIL] Alerta de atraso ignorado — sem destinatários configurados para ${delayedStep.stepName}`);
+    return;
+  }
+
   const stepLabel = STEP_LABELS[delayedStep.stepName as keyof typeof STEP_LABELS] ?? delayedStep.stepName;
   const daysLate  = delayedStep.dueAt
     ? Math.floor((Date.now() - new Date(delayedStep.dueAt).getTime()) / 86_400_000)
@@ -127,6 +135,64 @@ export async function sendDelayNotificationEmail(trackingId: string, stepId: str
   });
 
   logger.info(`[EMAIL] Alerta de atraso enviado para ${recipients.join(', ')} — step ${stepLabel} (${trackingId})`);
+}
+
+// ─── Notificação de novo lead em etapa ───────────────────────────────────────
+
+/** Dispara alerta de novo registro na etapa para os e-mails configurados na regra de SLA. */
+export async function sendNewLeadNotificationEmail(trackingId: string, stepName: string): Promise<void> {
+  if (!env.GRAPH_TENANT_ID || !env.GRAPH_CLIENT_ID || !env.GRAPH_CLIENT_SECRET) {
+    logger.warn('[EMAIL] Notificação de novo lead ignorada — credenciais Graph não configuradas');
+    return;
+  }
+
+  const tracking = await prisma.contractTracking.findUnique({
+    where: { id: trackingId },
+    include: {
+      customer: true,
+      pipedriveDeal: true,
+      assignedUser: { select: { name: true, email: true } },
+      steps: {
+        orderBy: { stepOrder: 'asc' },
+        include: { assignedUser: { select: { name: true } } },
+      },
+    },
+  });
+
+  if (!tracking) {
+    logger.warn(`[EMAIL] Novo lead: tracking ${trackingId} não encontrado`);
+    return;
+  }
+
+  // Fallback empresa → global
+  const companyId = tracking.pipedriveDeal?.companyId ?? null;
+  const specificRule = companyId
+    ? await prisma.slaRule.findFirst({ where: { stepName: stepName as any, companyId } })
+    : null;
+  const globalRule = await prisma.slaRule.findFirst({ where: { stepName: stepName as any, companyId: null } });
+  const slaRule = specificRule ?? globalRule;
+
+  if (!slaRule?.notifyOnNewLead) return;
+
+  const recipients = slaRule.notifyEmails
+    ? slaRule.notifyEmails.split(',').map((e) => e.trim()).filter(Boolean)
+    : [];
+
+  if (recipients.length === 0) {
+    logger.warn(`[EMAIL] Notificação de novo lead ignorada — sem e-mails configurados para ${stepName}`);
+    return;
+  }
+
+  const stepLabel = STEP_LABELS[stepName as keyof typeof STEP_LABELS] ?? stepName;
+  const contractUrl = `${env.APP_URL}/contracts/${trackingId}`;
+
+  await sendMail({
+    to: recipients,
+    subject: `🔔 Novo registro: ${stepLabel} — ${tracking.customer.name}`,
+    html: buildNewLeadEmailHtml(tracking, stepLabel, contractUrl),
+  });
+
+  logger.info(`[EMAIL] Notificação de novo lead enviada para ${recipients.join(', ')} — step ${stepLabel} (${trackingId})`);
 }
 
 // ─── Templates ────────────────────────────────────────────────────────────────
@@ -313,6 +379,100 @@ function buildDelayEmailHtml(
     </table>
 
   </td></tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 36px;">
+      <p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">
+        Paschoini Advogados &middot; Sistema interno de contratos &middot; Notificação automática
+      </p>
+    </td>
+  </tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+function buildNewLeadEmailHtml(tracking: any, stepLabel: string, contractUrl: string): string {
+  const c = tracking.customer;
+  const d = tracking.pipedriveDeal;
+
+  const stepsHtml = tracking.steps.map((step: any) => {
+    const color = STEP_STATUS_COLOR[step.status] ?? '#94a3b8';
+    const bg    = STEP_STATUS_BG[step.status]    ?? '#f1f5f9';
+    const icon  = STEP_STATUS_ICON[step.status]  ?? '○';
+    const label = STEP_LABELS[step.stepName as keyof typeof STEP_LABELS] ?? step.stepName;
+    const statusLabel = STEP_STATUS_LABELS[step.status as keyof typeof STEP_STATUS_LABELS] ?? step.status;
+    return `<tr>
+      <td style="padding:6px 0;">
+        <span style="display:inline-block;width:24px;height:24px;border-radius:50%;background:${bg};color:${color};font-size:13px;font-weight:700;text-align:center;line-height:24px;margin-right:10px;">${icon}</span>
+        <span style="font-size:13px;color:${color};font-weight:600;">${label}</span>
+        <span style="font-size:12px;color:#94a3b8;margin-left:8px;">${statusLabel}</span>
+      </td>
+    </tr>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="UTF-8"/></head>
+<body style="margin:0;padding:0;background:#f1f5f9;font-family:'Segoe UI',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f1f5f9;padding:32px 0;">
+<tr><td align="center">
+<table width="620" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08);">
+
+  <!-- Header -->
+  <tr>
+    <td style="background:#1a1f2e;padding:28px 36px;">
+      <p style="margin:0;color:#fff;font-size:22px;font-weight:700;">Paschoini Advogados</p>
+      <p style="margin:6px 0 0;color:#94a3b8;font-size:13px;">Sistema de Contratos</p>
+    </td>
+  </tr>
+
+  <!-- Body -->
+  <tr>
+    <td style="padding:32px 36px;">
+
+      <p style="margin:0 0 8px;background:#dbeafe;border-left:4px solid #3b82f6;padding:12px 16px;border-radius:6px;font-size:14px;color:#1e40af;font-weight:600;">
+        🔔 Novo registro na etapa: ${stepLabel}
+      </p>
+
+      ${sectionTitle('Cliente')}
+      <table width="100%" cellpadding="0" cellspacing="0">
+        ${row('Nome', c?.name ?? null)}
+        ${row('CPF/CNPJ', c?.cpfCnpj ?? null)}
+        ${row('E-mail', c?.email ?? null)}
+        ${row('Telefone', c?.phone ?? null)}
+      </table>
+
+      ${sectionTitle('Dados do Contrato')}
+      <table width="100%" cellpadding="0" cellspacing="0">
+        ${row('Deal Pipedrive', d?.title ?? null)}
+        ${row('Tipo de Serviço', d?.tipoServico ?? null)}
+        ${row('Valor', d?.value ? formatCurrency(d.value) : null)}
+        ${row('Proposta aceita em', tracking.proposalAcceptedAt ? formatDate(tracking.proposalAcceptedAt) : null)}
+        ${row('Responsável interno', tracking.assignedUser?.name ?? null)}
+      </table>
+
+      ${sectionTitle('Etapas')}
+      <table width="100%" cellpadding="0" cellspacing="0">${stepsHtml}</table>
+
+      <br/>
+      <table cellpadding="0" cellspacing="0">
+        <tr>
+          <td style="background:#1a1f2e;border-radius:7px;">
+            <a href="${contractUrl}"
+               style="display:inline-block;padding:13px 32px;color:#fff;font-size:14px;font-weight:700;text-decoration:none;">
+              → Ver contrato no sistema
+            </a>
+          </td>
+        </tr>
+      </table>
+
+    </td>
+  </tr>
 
   <!-- Footer -->
   <tr>
