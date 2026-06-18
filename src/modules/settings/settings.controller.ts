@@ -40,7 +40,10 @@ export async function getSlaSettings(req: Request, res: Response, next: NextFunc
       }
     }
 
-    res.render('settings/sla', { title: 'Configurações de SLA', ruleMap, companies, STEP_ORDER_LIST });
+    const delayNotifyEmailsEnv = (env.DELAY_NOTIFY_EMAILS ?? '')
+      .split(',').map((e) => e.trim()).filter(Boolean).join('\n');
+
+    res.render('settings/sla', { title: 'Configurações de SLA', ruleMap, companies, STEP_ORDER_LIST, delayNotifyEmailsEnv });
   } catch (err) {
     next(err);
   }

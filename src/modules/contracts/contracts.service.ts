@@ -202,6 +202,11 @@ export async function createContractFromDeal(params: {
 
   logger.info(`Contrato criado para deal ${params.externalDealId}: tracking ${tracking.id}`);
 
+  // Notifica responsáveis ao entrar em Proposta Aceita (step nasce IN_PROGRESS, startStep não é chamado)
+  sendNewLeadNotificationEmail(tracking.id, StepName.PROPOSAL_ACCEPTED).catch((err: Error) =>
+    logger.error(`[EMAIL] Falha ao notificar novo lead (PROPOSAL_ACCEPTED): ${err.message}`),
+  );
+
   broadcastEvent('new-contract', {
     trackingId: tracking.id,
     customerName: params.customerName,

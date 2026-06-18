@@ -47,11 +47,18 @@
           </label>
           <textarea name="notifyEmails" class="form-control font-monospace"
                     rows="3"
-                    placeholder="email1@dominio.com&#10;email2@dominio.com"
+                    placeholder="<%= typeof delayNotifyEmailsEnv !== 'undefined' && delayNotifyEmailsEnv ? delayNotifyEmailsEnv : 'email1@dominio.com\nemail2@dominio.com' %>"
           ><%= emailsFormatted %></textarea>
+          <% if (!emailsFormatted && typeof delayNotifyEmailsEnv !== 'undefined' && delayNotifyEmailsEnv) { %>
+          <div class="form-text text-warning">
+            <i class="bi bi-exclamation-triangle me-1"></i>Campo vazio — usando o fallback da variável de ambiente
+            <code>DELAY_NOTIFY_EMAILS</code>: <strong><%= delayNotifyEmailsEnv.replace(/\n/g, ', ') %></strong>
+          </div>
+          <% } else { %>
           <div class="form-text">
             Um e-mail por linha. Se vazio, usa a variável de ambiente <code>DELAY_NOTIFY_EMAILS</code>.
           </div>
+          <% } %>
         </div>
         <div class="mb-0">
           <div class="form-check form-switch">
