@@ -16,8 +16,15 @@ import {
 
 // Mapeamento tipo_servico (campo Pipedrive) → chave do template no Clicksign
 const TEMPLATE_MAP: Record<string, string> = {
-  'Continuado PF': 'dc4fdb62-cd1c-4e4a-b6ce-d393b5d06c80',
-  'Continuado PJ': '29878949-500b-468d-a62e-e98a7f9bed3f',
+  'PARCERIA-COMERCIAL':             '316fceb0-2cd3-491d-bc2e-e59bd04d41ec',
+  'PF-CONTINUADO':                  '33fe5b40-6cd4-4835-b642-d384a5edbe8f',
+  'PF-CONTINUADO-BENEFICIARIOS':    '9666e863-ae94-4d9c-8248-656b528f8e55',
+  'PF-DESCONTINUADO':               '862169a9-cfa9-43ee-ba12-1d224ea7110f',
+  'PF-DESCONTINUADO-BENEFICIARIOS': 'f88e6c1a-18f1-41c2-8028-b0918ce60417',
+  'PJ-CONTINUADO':                  'b1a58ace-fc13-433e-8333-0cfd0200586d',
+  'PJ-CONTINUADO-BENEFICIARIOS':    '87f86f0a-eaeb-4d03-b1e3-f1e742dd9af4',
+  'PJ-DESCONTINUADO':               '05337404-0c8c-4535-8ec2-0b359da3a61e',
+  'PJ-DESCONTINUADO-BENEFICIARIOS': 'ea3c08ff-71bc-4d66-b7a1-e588aadccb8b',
 };
 
 function getInternalSigners(): Array<{ name: string; email: string }> {
