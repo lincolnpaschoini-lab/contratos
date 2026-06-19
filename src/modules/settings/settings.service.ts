@@ -6,6 +6,12 @@ export async function getAllSlaRules() {
   return prisma.slaRule.findMany({ orderBy: [{ stepName: 'asc' }, { companyId: 'asc' }] });
 }
 
+export async function deleteCompanySlaRule(stepName: StepName, companyId: string) {
+  const rule = await prisma.slaRule.findFirst({ where: { stepName, companyId } });
+  if (!rule) return;
+  await prisma.slaRule.delete({ where: { id: rule.id } });
+}
+
 export async function upsertCompanySlaRule(
   stepName: StepName,
   companyId: string,

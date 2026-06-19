@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { setFlash } from '../../shared/middlewares/flash.middleware';
-import { getAllSlaRules, updateSlaRule, upsertCompanySlaRule } from './settings.service';
+import { getAllSlaRules, updateSlaRule, upsertCompanySlaRule, deleteCompanySlaRule } from './settings.service';
 import { StepName } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { recalculateAllDelays } from '../contracts/contracts.service';
@@ -121,6 +121,19 @@ export async function postUpsertCompanySla(req: Request, res: Response, next: Ne
     res.redirect('/settings/sla');
   } catch (err: any) {
     setFlash(res, 'error', err.message ?? 'Erro ao salvar configuração por empresa.');
+    res.redirect('/settings/sla');
+  }
+}
+
+export async function postResetCompanySla(req: Request, res: Response, next: NextFunction) {
+  try {
+    const stepName = req.params.stepName as StepName;
+    const { companyId } = z.object({ companyId: z.string().min(1) }).parse(req.body);
+    await deleteCompanySlaRule(stepName, companyId);
+    setFlash(res, 'success', 'Override removido. A etapa voltará a usar a regra Global.');
+    res.redirect('/settings/sla');
+  } catch (err: any) {
+    setFlash(res, 'error', err.message ?? 'Erro ao resetar configuração.');
     res.redirect('/settings/sla');
   }
 }

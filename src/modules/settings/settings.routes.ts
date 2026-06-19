@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { requireAuth, requireAdmin } from '../../shared/middlewares/auth.middleware';
 import {
-  getSlaSettings, postUpdateSla, postUpsertCompanySla, getWebhookEvents,
+  getSlaSettings, postUpdateSla, postUpsertCompanySla, postResetCompanySla, getWebhookEvents,
   postRecalculateAll, getIntegrations, postTestPipedrive, postTestClicksign,
 } from './settings.controller';
 
@@ -11,6 +11,7 @@ router.use(requireAuth, requireAdmin);
 
 router.get('/sla', getSlaSettings);
 router.post('/sla/step/:stepName', postUpsertCompanySla);
+router.post('/sla/step/:stepName/reset', postResetCompanySla);
 router.post('/sla/:id', postUpdateSla);
 router.post('/recalculate', postRecalculateAll);
 router.get('/webhooks', getWebhookEvents);
