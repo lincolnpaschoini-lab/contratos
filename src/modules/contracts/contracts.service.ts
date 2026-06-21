@@ -203,9 +203,7 @@ export async function createContractFromDeal(params: {
   logger.info(`Contrato criado para deal ${params.externalDealId}: tracking ${tracking.id}`);
 
   // Notifica responsáveis ao entrar em Proposta Aceita (step nasce IN_PROGRESS, startStep não é chamado)
-  sendNewLeadNotificationEmail(tracking.id, StepName.PROPOSAL_ACCEPTED).catch((err: Error) =>
-    logger.error(`[EMAIL] Falha ao notificar novo lead (PROPOSAL_ACCEPTED): ${err.message}`),
-  );
+  sendNewLeadNotificationEmail(tracking.id, StepName.PROPOSAL_ACCEPTED);
 
   broadcastEvent('new-contract', {
     trackingId: tracking.id,
@@ -389,9 +387,7 @@ export async function startStep(trackingId: string, stepId: string, userId: stri
   }
 
   // Notifica responsáveis quando novo lead entra em qualquer etapa (se configurado na regra de SLA)
-  sendNewLeadNotificationEmail(trackingId, step.stepName).catch((err: Error) =>
-    logger.error(`[EMAIL] Falha ao notificar novo lead (${step.stepName}): ${err.message}`),
-  );
+  sendNewLeadNotificationEmail(trackingId, step.stepName);
 }
 
 export async function completeStep(
@@ -481,9 +477,7 @@ export async function completeStep(
       }
 
       // Notifica responsáveis quando novo lead entra na próxima etapa (se configurado)
-      sendNewLeadNotificationEmail(trackingId, nextStepName).catch((err: Error) =>
-        logger.error(`[EMAIL] Falha ao notificar novo lead auto-start (${nextStepName}): ${err.message}`),
-      );
+      sendNewLeadNotificationEmail(trackingId, nextStepName);
     }
 
     // Sempre avança o currentStep do tracking ao concluir uma etapa,

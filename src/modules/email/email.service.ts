@@ -140,12 +140,24 @@ export async function sendDelayNotificationEmail(trackingId: string, stepId: str
 // ─── Notificação de novo lead em etapa ───────────────────────────────────────
 
 /** Dispara alerta de novo registro na etapa para os e-mails configurados na regra de SLA. */
-export async function sendNewLeadNotificationEmail(trackingId: string, stepName: string): Promise<void> {
+export function sendNewLeadNotificationEmail(trackingId: string, stepName: string): void {
   if (!env.GRAPH_TENANT_ID || !env.GRAPH_CLIENT_ID || !env.GRAPH_CLIENT_SECRET) {
     logger.warn('[EMAIL] Notificação de novo lead ignorada — credenciais Graph não configuradas');
     return;
   }
 
+  // Para CONTRACT_SIGNING aguarda 1 min para garantir que o envelope Clicksign
+  // (e seus signatários) já esteja criado quando o email for montado.
+  const delayMs = stepName === 'CONTRACT_SIGNING' ? 60_000 : 0;
+
+  setTimeout(() => {
+    _sendNewLeadCore(trackingId, stepName).catch((err) =>
+      logger.error(`[EMAIL] Erro na notificação de novo lead (${stepName}): ${err.message}`),
+    );
+  }, delayMs);
+}
+
+async function _sendNewLeadCore(trackingId: string, stepName: string): Promise<void> {
   const tracking = await prisma.contractTracking.findUnique({
     where: { id: trackingId },
     include: {
