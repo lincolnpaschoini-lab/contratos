@@ -99,7 +99,7 @@
             <div class="d-flex gap-1">
               <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
                       data-bs-target="#modalPayload"
-                      data-payload="<%= JSON.stringify(ev.payload).replace(/\"/g, '&quot;') %>">
+                      data-payload="<%- JSON.stringify(ev.payload).replace(/&/g,'&amp;').replace(/"/g,'&quot;') %>">
                 <i class="bi bi-braces"></i>
               </button>
               <form method="POST" action="/webhook-events/<%= ev.id %>/delete" class="d-inline"
