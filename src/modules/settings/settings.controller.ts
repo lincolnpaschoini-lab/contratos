@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { setFlash } from '../../shared/middlewares/flash.middleware';
 import { getAllSlaRules, updateSlaRule, upsertCompanySlaRule, deleteCompanySlaRule } from './settings.service';
 import {
-  getAllMappings, createMapping, deleteMapping, toggleMappingActive,
+  getAllMappings, createMapping, updateMapping, deleteMapping, toggleMappingActive,
   SOURCE_FIELDS, CONTRACT_TYPE_LABELS, resolveSourceField,
 } from './placeholder.service';
 import { StepName } from '@prisma/client';
@@ -190,6 +190,27 @@ export async function postCreateMapping(req: Request, res: Response, next: NextF
       setFlash(res, 'error', 'Já existe um mapeamento com esse campo, placeholder e tipo.');
     } else {
       setFlash(res, 'error', err.message ?? 'Erro ao criar mapeamento.');
+    }
+    res.redirect('/settings/placeholders');
+  }
+}
+
+export async function postUpdateMapping(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = z.object({
+      sourceField:          z.string().min(1, 'Campo fonte obrigatório.'),
+      clicksignPlaceholder: z.string().min(1, 'Placeholder obrigatório.'),
+      contractType:         z.enum(['all', 'PF', 'PJ']),
+    }).parse(req.body);
+
+    await updateMapping(req.params.id, data);
+    setFlash(res, 'success', 'Mapeamento atualizado com sucesso.');
+    res.redirect('/settings/placeholders');
+  } catch (err: any) {
+    if (err.code === 'P2002') {
+      setFlash(res, 'error', 'Já existe um mapeamento com esse campo, placeholder e tipo.');
+    } else {
+      setFlash(res, 'error', err.message ?? 'Erro ao atualizar mapeamento.');
     }
     res.redirect('/settings/placeholders');
   }

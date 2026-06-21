@@ -116,12 +116,23 @@
                 </form>
               </td>
               <td class="text-end">
-                <form method="POST" action="/settings/placeholders/<%= m.id %>/delete"
-                      onsubmit="return confirm('Remover o mapeamento \'' + '<%= m.clicksignPlaceholder.replace(/'/g,'\\\'') %>' + '\'?')">
-                  <button type="submit" class="btn btn-sm btn-outline-danger py-0">
-                    <i class="bi bi-trash"></i>
+                <div class="d-flex gap-1 justify-content-end">
+                  <button type="button" class="btn btn-sm btn-outline-secondary py-0"
+                          title="Editar"
+                          data-bs-toggle="modal" data-bs-target="#editMappingModal"
+                          data-id="<%= m.id %>"
+                          data-source="<%= m.sourceField %>"
+                          data-placeholder="<%= m.clicksignPlaceholder %>"
+                          data-type="<%= m.contractType %>">
+                    <i class="bi bi-pencil"></i>
                   </button>
-                </form>
+                  <form method="POST" action="/settings/placeholders/<%= m.id %>/delete"
+                        onsubmit="return confirm('Remover o mapeamento \'<%= m.clicksignPlaceholder %>\'?')">
+                    <button type="submit" class="btn btn-sm btn-outline-danger py-0" title="Excluir">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                </div>
               </td>
             </tr>
             <% } %>
@@ -188,29 +199,135 @@
   Mapeamentos <strong>inativos</strong> são ignorados.
 </div>
 
-<script>
-// Permite digitar um caminho customizado quando o select não tem a opção desejada
-(function () {
-  const sel = document.querySelector('select[name="sourceField"]');
-  const custom = document.getElementById('sourceFieldCustom');
-  if (!sel || !custom) return;
+<!-- ── Modal de edição ────────────────────────────────────────────────────── -->
+<div class="modal fade" id="editMappingModal" tabindex="-1" aria-labelledby="editMappingModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <form method="POST" id="editMappingForm" action="/settings/placeholders/__ID__">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="editMappingModalLabel"><i class="bi bi-pencil me-2"></i>Editar mapeamento</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Campo fonte (Pipedrive)</label>
+            <select name="sourceField" id="editSourceSelect" class="form-select" required>
+              <% let lastGrpE = null; %>
+              <% for (const sf of SOURCE_FIELDS) { %>
+              <% if (sf.group !== lastGrpE) { lastGrpE = sf.group; %>
+              <optgroup label="<%= sf.group %>">
+              <% } %>
+                <option value="<%= sf.field %>"><%= sf.label %> (<%= sf.field %>)</option>
+              <% } %>
+            </select>
+            <div class="form-text">Ou escreva um caminho customizado:</div>
+            <input type="text" id="editSourceCustom" class="form-control form-control-sm mt-1"
+                   placeholder="ex: customer.contactName|customer.name" style="display:none" />
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Placeholder Clicksign</label>
+            <input type="text" name="clicksignPlaceholder" id="editPlaceholder" class="form-control" required
+                   placeholder="ex: NOME_EMPRESA" />
+            <div class="form-text">Nome exato definido no template Clicksign (case-sensitive).</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Tipo de contrato</label>
+            <select name="contractType" id="editContractType" class="form-select" required>
+              <option value="PJ">PJ</option>
+              <option value="PF">PF</option>
+              <option value="all">Todos</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar</button>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
 
-  sel.addEventListener('change', function () {
+<script>
+(function () {
+  // ── Formulário de adição: campo customizado ──────────────────────────────
+  const addSel = document.querySelector('select[name="sourceField"]');
+  const addCustom = document.getElementById('sourceFieldCustom');
+  if (addSel && addCustom) {
+    const optCustom = document.createElement('option');
+    optCustom.value = '__custom__';
+    optCustom.textContent = '— digitar caminho customizado —';
+    addSel.appendChild(optCustom);
+
+    addSel.addEventListener('change', function () {
+      if (this.value === '__custom__') {
+        addCustom.style.display = '';
+        addCustom.name = 'sourceField';
+        addSel.removeAttribute('name');
+      } else {
+        addCustom.style.display = 'none';
+        addSel.name = 'sourceField';
+        addCustom.removeAttribute('name');
+      }
+    });
+  }
+
+  // ── Modal de edição ──────────────────────────────────────────────────────
+  const editModal = document.getElementById('editMappingModal');
+  if (!editModal) return;
+
+  const editForm     = document.getElementById('editMappingForm');
+  const editSel      = document.getElementById('editSourceSelect');
+  const editCustom   = document.getElementById('editSourceCustom');
+  const editPh       = document.getElementById('editPlaceholder');
+  const editType     = document.getElementById('editContractType');
+
+  // Campo customizado no modal
+  const optCustomEdit = document.createElement('option');
+  optCustomEdit.value = '__custom__';
+  optCustomEdit.textContent = '— digitar caminho customizado —';
+  editSel.appendChild(optCustomEdit);
+
+  editSel.addEventListener('change', function () {
     if (this.value === '__custom__') {
-      custom.style.display = '';
-      custom.name = 'sourceField';
-      sel.removeAttribute('name');
+      editCustom.style.display = '';
+      editCustom.name = 'sourceField';
+      editSel.removeAttribute('name');
     } else {
-      custom.style.display = 'none';
-      sel.name = 'sourceField';
-      custom.removeAttribute('name');
+      editCustom.style.display = 'none';
+      editSel.name = 'sourceField';
+      editCustom.removeAttribute('name');
     }
   });
 
-  // Adiciona opção "customizado" no final do select
-  const opt = document.createElement('option');
-  opt.value = '__custom__';
-  opt.textContent = '— digitar caminho customizado —';
-  sel.appendChild(opt);
+  editModal.addEventListener('show.bs.modal', function (event) {
+    const btn = event.relatedTarget;
+    const id          = btn.dataset.id;
+    const sourceField = btn.dataset.source;
+    const placeholder = btn.dataset.placeholder;
+    const type        = btn.dataset.type;
+
+    // Atualiza action do form com o ID correto
+    editForm.action = '/settings/placeholders/' + id;
+
+    // Preenche placeholder e tipo
+    editPh.value = placeholder;
+    editType.value = type;
+
+    // Seleciona o campo fonte no select (ou ativa campo customizado)
+    const matchingOpt = editSel.querySelector('option[value="' + CSS.escape(sourceField) + '"]');
+    if (matchingOpt) {
+      editSel.value = sourceField;
+      editSel.name = 'sourceField';
+      editCustom.style.display = 'none';
+      editCustom.removeAttribute('name');
+    } else {
+      editSel.value = '__custom__';
+      editSel.removeAttribute('name');
+      editCustom.style.display = '';
+      editCustom.name = 'sourceField';
+      editCustom.value = sourceField;
+    }
+  });
 })();
 </script>

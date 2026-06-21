@@ -70,6 +70,16 @@ export async function deleteMapping(id: string) {
   return prisma.clicksignFieldMapping.delete({ where: { id } });
 }
 
+export async function updateMapping(id: string, data: {
+  sourceField: string;
+  clicksignPlaceholder: string;
+  contractType: string;
+}) {
+  const m = await prisma.clicksignFieldMapping.findUnique({ where: { id } });
+  if (!m) throw new Error('Mapeamento não encontrado');
+  return prisma.clicksignFieldMapping.update({ where: { id }, data });
+}
+
 export async function toggleMappingActive(id: string) {
   const m = await prisma.clicksignFieldMapping.findUnique({ where: { id } });
   if (!m) throw new Error('Mapeamento não encontrado');

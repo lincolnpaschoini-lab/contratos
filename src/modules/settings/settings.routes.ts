@@ -3,7 +3,7 @@ import { requireAuth, requireAdmin } from '../../shared/middlewares/auth.middlew
 import {
   getSlaSettings, postUpdateSla, postUpsertCompanySla, postResetCompanySla, getWebhookEvents,
   postRecalculateAll, getIntegrations, postTestPipedrive, postTestClicksign,
-  getPlaceholderSettings, postCreateMapping, postDeleteMapping, postToggleMapping,
+  getPlaceholderSettings, postCreateMapping, postUpdateMapping, postDeleteMapping, postToggleMapping,
 } from './settings.controller';
 
 const router = Router();
@@ -22,6 +22,7 @@ router.post('/integrations/test/clicksign', postTestClicksign);
 
 router.get('/placeholders', getPlaceholderSettings);
 router.post('/placeholders', postCreateMapping);
+router.post('/placeholders/:id', postUpdateMapping);
 router.post('/placeholders/:id/toggle', postToggleMapping);
 router.post('/placeholders/:id/delete', postDeleteMapping);
 
