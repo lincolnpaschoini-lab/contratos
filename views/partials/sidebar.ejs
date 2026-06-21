@@ -29,6 +29,11 @@
       </a>
     </li>
     <li class="nav-item">
+      <a class="nav-link <%= locals.title && locals.title.includes('Placeholders') ? 'active' : '' %>" href="/settings/placeholders">
+        <i class="bi bi-input-cursor-text"></i> Config. Placeholders
+      </a>
+    </li>
+    <li class="nav-item">
       <a class="nav-link <%= locals.title && locals.title.includes('Webhook') ? 'active' : '' %>" href="/settings/webhooks">
         <i class="bi bi-activity"></i> Webhooks
       </a>

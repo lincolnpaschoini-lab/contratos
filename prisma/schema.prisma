@@ -254,6 +254,20 @@ model Notification {
   @@map("notifications")
 }
 
+model ClicksignFieldMapping {
+  id                   String  @id @default(uuid())
+  sourceField          String  @map("source_field")
+  clicksignPlaceholder String  @map("clicksign_placeholder")
+  contractType         String  @default("all") @map("contract_type") // "all" | "PF" | "PJ"
+  active               Boolean @default(true)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([sourceField, clicksignPlaceholder, contractType])
+  @@map("clicksign_field_mappings")
+}
+
 model ActionToken {
   id         String    @id @default(uuid())
   trackingId String    @map("tracking_id")

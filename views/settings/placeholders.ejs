@@ -1,0 +1,216 @@
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-2">
+  <div>
+    <h2 class="page-title">Config. Placeholders</h2>
+    <p class="text-muted mb-0">
+      Associa campos do Pipedrive aos placeholders do Clicksign. Ao criar um envelope, o sistema preenche os campos automaticamente com esses dados.
+    </p>
+  </div>
+</div>
+
+<%
+  // Agrupa mapeamentos por tipo de contrato para exibição nas abas
+  const byType = { PJ: [], PF: [], all: [] };
+  for (const m of mappings) {
+    (byType[m.contractType] || (byType[m.contractType] = [])).push(m);
+  }
+
+  // Labels para os grupos de SOURCE_FIELDS
+  const groups = [...new Set(SOURCE_FIELDS.map(sf => sf.group))];
+%>
+
+<!-- ── Campos disponíveis (referência) ──────────────────────────────────── -->
+<div class="card mb-4">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <strong><i class="bi bi-table me-2"></i>Campos disponíveis do Pipedrive</strong>
+    <% if (exampleCustomerName) { %>
+    <span class="badge bg-secondary">
+      <i class="bi bi-person me-1"></i>Exemplo: <%= exampleCustomerName %>
+    </span>
+    <% } %>
+  </div>
+  <div class="card-body p-0">
+    <table class="table table-sm table-hover mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Campo (caminho)</th>
+          <th>Descrição</th>
+          <th class="text-end">Valor no último contrato</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% let lastGroup = null; %>
+        <% for (const sf of SOURCE_FIELDS) { %>
+        <% if (sf.group !== lastGroup) { lastGroup = sf.group; %>
+        <tr class="table-secondary">
+          <td colspan="3" class="small fw-semibold text-uppercase text-muted px-3 py-1"><%= sf.group %></td>
+        </tr>
+        <% } %>
+        <tr>
+          <td class="font-monospace small"><%= sf.field %></td>
+          <td class="small"><%= sf.label %></td>
+          <td class="text-end small">
+            <% if (exampleValues[sf.field]) { %>
+            <span class="text-success"><%= exampleValues[sf.field] %></span>
+            <% } else { %>
+            <span class="text-muted">—</span>
+            <% } %>
+          </td>
+        </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── Mapeamentos configurados ──────────────────────────────────────────── -->
+<div class="card mb-4">
+  <div class="card-header">
+    <strong><i class="bi bi-arrow-left-right me-2"></i>Mapeamentos configurados</strong>
+  </div>
+  <div class="card-body p-0">
+
+    <ul class="nav nav-tabs px-3 pt-2 bg-light border-bottom" role="tablist">
+      <li class="nav-item">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-pj" type="button">
+          PJ <span class="badge bg-secondary ms-1"><%= byType.PJ.length %></span>
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-pf" type="button">
+          PF <span class="badge bg-secondary ms-1"><%= byType.PF.length %></span>
+        </button>
+      </li>
+      <li class="nav-item">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-all" type="button">
+          Todos <span class="badge bg-secondary ms-1"><%= byType.all.length %></span>
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content">
+      <% [['pj','PJ'],['pf','PF'],['all','all']].forEach(function([tabId, typeKey]) { %>
+      <div class="tab-pane fade <%= tabId === 'pj' ? 'show active' : '' %>" id="tab-<%= tabId %>">
+        <% if (byType[typeKey].length === 0) { %>
+        <div class="text-muted p-4 text-center small">Nenhum mapeamento configurado para este tipo.</div>
+        <% } else { %>
+        <table class="table table-sm mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Campo fonte</th>
+              <th>Placeholder Clicksign</th>
+              <th class="text-center">Ativo</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <% for (const m of byType[typeKey]) { %>
+            <tr class="<%= !m.active ? 'text-muted' : '' %>">
+              <td class="font-monospace small"><%= m.sourceField %></td>
+              <td class="small fw-semibold"><%= m.clicksignPlaceholder %></td>
+              <td class="text-center">
+                <form method="POST" action="/settings/placeholders/<%= m.id %>/toggle" class="d-inline">
+                  <button type="submit" class="btn btn-link p-0 border-0"
+                          title="<%= m.active ? 'Desativar' : 'Ativar' %>">
+                    <i class="bi bi-<%= m.active ? 'toggle-on text-success' : 'toggle-off text-secondary' %> fs-5"></i>
+                  </button>
+                </form>
+              </td>
+              <td class="text-end">
+                <form method="POST" action="/settings/placeholders/<%= m.id %>/delete"
+                      onsubmit="return confirm('Remover o mapeamento \'' + '<%= m.clicksignPlaceholder.replace(/'/g,'\\\'') %>' + '\'?')">
+                  <button type="submit" class="btn btn-sm btn-outline-danger py-0">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
+              </td>
+            </tr>
+            <% } %>
+          </tbody>
+        </table>
+        <% } %>
+      </div>
+      <% }); %>
+    </div>
+  </div>
+</div>
+
+<!-- ── Adicionar mapeamento ────────────────────────────────────────────────── -->
+<div class="card">
+  <div class="card-header">
+    <strong><i class="bi bi-plus-circle me-2"></i>Adicionar mapeamento</strong>
+  </div>
+  <div class="card-body">
+    <form method="POST" action="/settings/placeholders" class="row g-3 align-items-end">
+      <div class="col-12 col-md-5">
+        <label class="form-label">Campo fonte (Pipedrive)</label>
+        <select name="sourceField" class="form-select" required>
+          <option value="">— selecione —</option>
+          <% let lastGrp = null; %>
+          <% for (const sf of SOURCE_FIELDS) { %>
+          <% if (sf.group !== lastGrp) { lastGrp = sf.group; %>
+          <optgroup label="<%= sf.group %>">
+          <% } %>
+            <option value="<%= sf.field %>"><%= sf.label %> (<%= sf.field %>)</option>
+          <% } %>
+        </select>
+        <div class="form-text">Ou escreva um caminho customizado:</div>
+        <input type="text" name="sourceField" class="form-control form-control-sm mt-1"
+               placeholder="ex: customer.contactName|customer.name"
+               id="sourceFieldCustom" style="display:none" />
+      </div>
+      <div class="col-12 col-md-4">
+        <label class="form-label">Placeholder Clicksign</label>
+        <input type="text" name="clicksignPlaceholder" class="form-control" required
+               placeholder="ex: NOME_EMPRESA" />
+        <div class="form-text">Nome exato definido no template Clicksign (case-sensitive).</div>
+      </div>
+      <div class="col-12 col-md-2">
+        <label class="form-label">Tipo de contrato</label>
+        <select name="contractType" class="form-select" required>
+          <option value="PJ">PJ</option>
+          <option value="PF">PF</option>
+          <option value="all">Todos</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-1">
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-plus-lg"></i>
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="alert alert-info mt-3 small">
+  <i class="bi bi-info-circle me-2"></i>
+  <strong>Como funciona:</strong> Ao criar um envelope no Clicksign, o sistema resolve cada campo fonte no contrato e preenche o placeholder correspondente.
+  Mapeamentos do tipo <strong>PJ</strong> ou <strong>PF</strong> têm prioridade sobre <strong>Todos</strong> para o mesmo placeholder.
+  Mapeamentos <strong>inativos</strong> são ignorados.
+</div>
+
+<script>
+// Permite digitar um caminho customizado quando o select não tem a opção desejada
+(function () {
+  const sel = document.querySelector('select[name="sourceField"]');
+  const custom = document.getElementById('sourceFieldCustom');
+  if (!sel || !custom) return;
+
+  sel.addEventListener('change', function () {
+    if (this.value === '__custom__') {
+      custom.style.display = '';
+      custom.name = 'sourceField';
+      sel.removeAttribute('name');
+    } else {
+      custom.style.display = 'none';
+      sel.name = 'sourceField';
+      custom.removeAttribute('name');
+    }
+  });
+
+  // Adiciona opção "customizado" no final do select
+  const opt = document.createElement('option');
+  opt.value = '__custom__';
+  opt.textContent = '— digitar caminho customizado —';
+  sel.appendChild(opt);
+})();
+</script>

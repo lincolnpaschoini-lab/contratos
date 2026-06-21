@@ -2,6 +2,10 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { setFlash } from '../../shared/middlewares/flash.middleware';
 import { getAllSlaRules, updateSlaRule, upsertCompanySlaRule, deleteCompanySlaRule } from './settings.service';
+import {
+  getAllMappings, createMapping, deleteMapping, toggleMappingActive,
+  SOURCE_FIELDS, CONTRACT_TYPE_LABELS, resolveSourceField,
+} from './placeholder.service';
 import { StepName } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { recalculateAllDelays } from '../contracts/contracts.service';
@@ -135,6 +139,80 @@ export async function postResetCompanySla(req: Request, res: Response, next: Nex
   } catch (err: any) {
     setFlash(res, 'error', err.message ?? 'Erro ao resetar configuração.');
     res.redirect('/settings/sla');
+  }
+}
+
+// ─── Config. Placeholders ────────────────────────────────────────────────────
+
+export async function getPlaceholderSettings(req: Request, res: Response, next: NextFunction) {
+  try {
+    const [mappings, latestTracking] = await Promise.all([
+      getAllMappings(),
+      prisma.contractTracking.findFirst({
+        orderBy: { createdAt: 'desc' },
+        include: { customer: true, pipedriveDeal: true },
+      }),
+    ]);
+
+    const exampleValues: Record<string, string> = {};
+    if (latestTracking) {
+      for (const sf of SOURCE_FIELDS) {
+        exampleValues[sf.field] = resolveSourceField(sf.field, latestTracking.customer, latestTracking.pipedriveDeal) || '';
+      }
+    }
+
+    res.render('settings/placeholders', {
+      title: 'Config. Placeholders',
+      mappings,
+      SOURCE_FIELDS,
+      CONTRACT_TYPE_LABELS,
+      exampleValues,
+      exampleCustomerName: (latestTracking?.customer as any)?.name ?? null,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function postCreateMapping(req: Request, res: Response, next: NextFunction) {
+  try {
+    const data = z.object({
+      sourceField:          z.string().min(1, 'Campo fonte obrigatório.'),
+      clicksignPlaceholder: z.string().min(1, 'Placeholder obrigatório.'),
+      contractType:         z.enum(['all', 'PF', 'PJ']),
+    }).parse(req.body);
+
+    await createMapping(data);
+    setFlash(res, 'success', 'Mapeamento adicionado com sucesso.');
+    res.redirect('/settings/placeholders');
+  } catch (err: any) {
+    if (err.code === 'P2002') {
+      setFlash(res, 'error', 'Já existe um mapeamento com esse campo, placeholder e tipo.');
+    } else {
+      setFlash(res, 'error', err.message ?? 'Erro ao criar mapeamento.');
+    }
+    res.redirect('/settings/placeholders');
+  }
+}
+
+export async function postDeleteMapping(req: Request, res: Response, next: NextFunction) {
+  try {
+    await deleteMapping(req.params.id);
+    setFlash(res, 'success', 'Mapeamento removido.');
+    res.redirect('/settings/placeholders');
+  } catch (err: any) {
+    setFlash(res, 'error', err.message ?? 'Erro ao remover mapeamento.');
+    res.redirect('/settings/placeholders');
+  }
+}
+
+export async function postToggleMapping(req: Request, res: Response, next: NextFunction) {
+  try {
+    await toggleMappingActive(req.params.id);
+    res.redirect('/settings/placeholders');
+  } catch (err: any) {
+    setFlash(res, 'error', err.message ?? 'Erro ao alterar status.');
+    res.redirect('/settings/placeholders');
   }
 }
 

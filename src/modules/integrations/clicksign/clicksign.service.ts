@@ -2,6 +2,7 @@ import { prisma } from '../../../config/database';
 import { markSigningComplete } from '../../contracts/contracts.service';
 import { logger } from '../../../config/logger';
 import { env } from '../../../config/env';
+import { resolveSourceField } from '../../settings/placeholder.service';
 import {
   createEnvelope,
   addDocumentFromTemplate,
@@ -58,15 +59,15 @@ export async function sendContractToClicksign(params: {
 
   console.log(`[CLICKSIGN] Template selecionado: ${templateKey}`);
 
-  // Busca dados completos do cliente para preencher variáveis do template
+  // Busca dados completos do cliente + deal para preencher variáveis do template
   const fullTracking = await prisma.contractTracking.findUnique({
     where: { id: trackingId },
-    include: { customer: true },
+    include: { customer: true, pipedriveDeal: true },
   });
   const c = fullTracking?.customer as any;
+  const deal = fullTracking?.pipedriveDeal as any;
   const isPF = tipoServico?.includes('PF') ?? false;
 
-  // Log detalhado dos dados do cliente para facilitar diagnóstico de campos vazios
   console.log('[CLICKSIGN] Dados do cliente para o template:', JSON.stringify({
     name:         c?.name,
     document:     c?.document,
@@ -83,55 +84,19 @@ export async function sendContractToClicksign(params: {
     tipoServico,
   }));
 
-  // Helpers reutilizáveis
-  const emailEmpresa    = c?.email        || c?.contactEmail || '';
-  const emailRepres     = c?.contactEmail || c?.email        || '';
-  const telefoneEmpresa = c?.phone        || c?.contactPhone || '';
-  const telefoneRepres  = c?.contactPhone || c?.phone        || '';
+  // Carrega mapeamentos do banco (tipo específico + genéricos "all")
+  const dbMappings = await prisma.clicksignFieldMapping.findMany({
+    where: { active: true, contractType: { in: ['all', isPF ? 'PF' : 'PJ'] } },
+    orderBy: [{ contractType: 'asc' }, { clicksignPlaceholder: 'asc' }],
+  });
 
-  // Monta variáveis de acordo com o tipo de contrato.
-  // Os nomes devem ser EXATAMENTE os definidos no template Clicksign (case-sensitive).
-  let allTemplateVars: Record<string, string>;
-
-  if (!isPF) {
-    // ── Template "Continuado PJ" ─────────────────────────────────
-    allTemplateVars = {
-      // Dados da empresa
-      'NOME_EMPRESA':     c?.name     || '',
-      'CNPJ':             c?.document || '',
-      // Endereço da empresa
-      'Logradouro':       c?.address  || '',
-      'Cidade':           c?.city     || '',
-      'Estado':           c?.state    || '',
-      'CEP_Empresa':      c?.zipCode  || '',
-      // Contato da empresa
-      'E-mail_Empresa':   emailEmpresa,
-      'Telefone_Empresa': telefoneEmpresa,
-      'Celular_Empresa':  telefoneEmpresa,
-      'WhatsApp_Empresa': telefoneEmpresa,
-      // Representante / Procurador
-      'Nome_REPRES':           c?.contactName  || '',
-      'E-mail Representante':  emailRepres,
-      'Telefone_REPRES':       telefoneRepres,
-      'Celular_REPRES':        telefoneRepres,
-      'WhatsApp_REPRES':       telefoneRepres,
-    };
-  } else {
-    // ── Template "Continuado PF" ─────────────────────────────────
-    // ATENÇÃO: verifique os nomes exatos das variáveis no template PF do Clicksign
-    // e ajuste abaixo se necessário.
-    allTemplateVars = {
-      'Nome':       c?.contactName || c?.name || '',
-      'CPF':        c?.document    || '',
-      'E-mail':     emailRepres,
-      'Telefone':   telefoneRepres,
-      'Celular':    telefoneRepres,
-      'WhatsApp':   telefoneRepres,
-      'Logradouro': c?.address || '',
-      'Cidade':     c?.city    || '',
-      'Estado':     c?.state   || '',
-      'CEP':        c?.zipCode || '',
-    };
+  // Constrói allTemplateVars: "all" primeiro, depois tipo específico sobrescreve
+  const allTemplateVars: Record<string, string> = {};
+  const genericMappings = dbMappings.filter((m) => m.contractType === 'all');
+  const specificMappings = dbMappings.filter((m) => m.contractType !== 'all');
+  for (const mapping of [...genericMappings, ...specificMappings]) {
+    const value = resolveSourceField(mapping.sourceField, c, deal);
+    if (value) allTemplateVars[mapping.clicksignPlaceholder] = value;
   }
 
   // Envia somente campos com valor — evita sobrescrever defaults do template com string vazia
