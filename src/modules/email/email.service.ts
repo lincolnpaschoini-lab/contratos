@@ -156,6 +156,7 @@ export async function sendNewLeadNotificationEmail(trackingId: string, stepName:
         orderBy: { stepOrder: 'asc' },
         include: { assignedUser: { select: { name: true } } },
       },
+      clicksignDocs: { orderBy: { createdAt: 'desc' }, take: 1 },
     },
   });
 
@@ -189,7 +190,7 @@ export async function sendNewLeadNotificationEmail(trackingId: string, stepName:
   await sendMail({
     to: recipients,
     subject: `🔔 Novo registro: ${stepLabel} — ${tracking.customer.name}`,
-    html: buildNewLeadEmailHtml(tracking, stepLabel, contractUrl),
+    html: buildNewLeadEmailHtml(tracking, stepLabel, contractUrl, stepName),
   });
 
   logger.info(`[EMAIL] Notificação de novo lead enviada para ${recipients.join(', ')} — step ${stepLabel} (${trackingId})`);
@@ -396,7 +397,7 @@ function buildDelayEmailHtml(
 </html>`;
 }
 
-function buildNewLeadEmailHtml(tracking: any, stepLabel: string, contractUrl: string): string {
+function buildNewLeadEmailHtml(tracking: any, stepLabel: string, contractUrl: string, stepName?: string): string {
   const c = tracking.customer;
   const d = tracking.pipedriveDeal;
 
@@ -414,6 +415,40 @@ function buildNewLeadEmailHtml(tracking: any, stepLabel: string, contractUrl: st
       </td>
     </tr>`;
   }).join('');
+
+  // Signatários Clicksign — exibidos apenas na etapa de Assinatura
+  const csDoc = tracking.clicksignDocs?.[0] ?? null;
+  const csSigners: any[] = csDoc?.rawPayload?.signers ?? [];
+  const isSigningStep = stepName === 'CONTRACT_SIGNING';
+
+  const signersBlockHtml = isSigningStep && csSigners.length > 0 ? `
+      ${sectionTitle('Signatários do Contrato')}
+      <table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+        <thead>
+          <tr style="background:#f8fafc;">
+            <td style="padding:8px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">Nome</td>
+            <td style="padding:8px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;">E-mail</td>
+            <td style="padding:8px 14px;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.05em;text-align:right;">Status</td>
+          </tr>
+        </thead>
+        <tbody>
+          ${csSigners.map((s: any) => {
+            const signed = s.status === 'signed' || !!s.signed_at;
+            return `<tr style="border-top:1px solid #f1f5f9;">
+              <td style="padding:9px 14px;font-size:13px;color:#1a1f2e;font-weight:600;">${s.name ?? '—'}</td>
+              <td style="padding:9px 14px;font-size:12px;color:#475569;">${s.email ?? '—'}</td>
+              <td style="padding:9px 14px;text-align:right;">
+                <span style="font-size:11px;font-weight:700;color:${signed ? '#16a34a' : '#d97706'};background:${signed ? '#dcfce7' : '#fef3c7'};padding:3px 10px;border-radius:10px;">
+                  ${signed ? '✓ Assinado' : '⏳ Aguardando'}
+                </span>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>` : (isSigningStep ? `
+      <p style="margin:16px 0 0;background:#fef3c7;border-left:4px solid #f59e0b;padding:10px 14px;border-radius:4px;font-size:13px;color:#92400e;">
+        ⏳ O envelope no Clicksign ainda está sendo criado. Acesse o sistema para acompanhar os signatários.
+      </p>` : '');
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -442,7 +477,7 @@ function buildNewLeadEmailHtml(tracking: any, stepLabel: string, contractUrl: st
       ${sectionTitle('Cliente')}
       <table width="100%" cellpadding="0" cellspacing="0">
         ${row('Nome', c?.name ?? null)}
-        ${row('CPF/CNPJ', c?.cpfCnpj ?? null)}
+        ${row('CPF/CNPJ', c?.document ?? null)}
         ${row('E-mail', c?.email ?? null)}
         ${row('Telefone', c?.phone ?? null)}
       </table>
@@ -458,6 +493,8 @@ function buildNewLeadEmailHtml(tracking: any, stepLabel: string, contractUrl: st
 
       ${sectionTitle('Etapas')}
       <table width="100%" cellpadding="0" cellspacing="0">${stepsHtml}</table>
+
+      ${signersBlockHtml}
 
       <br/>
       <table cellpadding="0" cellspacing="0">
