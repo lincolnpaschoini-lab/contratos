@@ -167,27 +167,148 @@
 
 <!-- Modal Payload -->
 <div class="modal fade" id="modalPayload" tabindex="-1">
-  <div class="modal-dialog modal-lg">
+  <div class="modal-dialog modal-xl">
     <div class="modal-content">
       <div class="modal-header">
         <h5 class="modal-title"><i class="bi bi-braces me-2"></i>Payload do Evento</h5>
+        <div class="ms-auto me-3">
+          <div class="btn-group btn-group-sm" role="group">
+            <input type="radio" class="btn-check" name="payloadViewMode" id="viewFormatted" value="formatted" checked>
+            <label class="btn btn-outline-secondary" for="viewFormatted"><i class="bi bi-table me-1"></i>Formatado</label>
+            <input type="radio" class="btn-check" name="payloadViewMode" id="viewRaw" value="raw">
+            <label class="btn btn-outline-secondary" for="viewRaw"><i class="bi bi-code-slash me-1"></i>JSON Bruto</label>
+          </div>
+        </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
-      <div class="modal-body">
-        <pre id="payloadContent" class="bg-dark text-light p-3 rounded" style="max-height:400px;overflow:auto;font-size:12px"></pre>
+      <div class="modal-body p-0" style="max-height:75vh;overflow-y:auto">
+        <div id="payloadFormatted" class="p-3"></div>
+        <pre id="payloadRaw" class="m-0 p-3 bg-dark text-light" style="display:none;font-size:12px;min-height:200px"></pre>
       </div>
     </div>
   </div>
 </div>
 
+<style>
+.payload-section { border-left: 4px solid; border-radius: 4px; margin-bottom: 12px; }
+.payload-section .section-header { padding: 6px 12px; font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: .05em; cursor: pointer; user-select: none; }
+.payload-section .section-body { padding: 4px 0; }
+.pv-key   { color: #6c757d; font-weight: 600; white-space: nowrap; padding-right: 16px; vertical-align: top; font-size: 0.8rem; width: 1px; }
+.pv-val   { font-size: 0.82rem; word-break: break-word; }
+.pv-str   { color: #198754; }
+.pv-num   { color: #0d6efd; font-weight: 600; }
+.pv-null  { color: #adb5bd; font-style: italic; }
+.pv-bool-t{ color: #198754; font-weight: 700; }
+.pv-bool-f{ color: #dc3545; font-weight: 700; }
+.pv-nested{ border-left: 2px solid #dee2e6; padding-left: 10px; margin-top: 4px; }
+
+/* JSON syntax highlight */
+.json-key    { color: #c678dd; }
+.json-string { color: #98c379; }
+.json-number { color: #d19a66; }
+.json-bool   { color: #56b6c2; font-weight:bold; }
+.json-null   { color: #abb2bf; font-style:italic; }
+</style>
+
 <script>
-document.getElementById('modalPayload')?.addEventListener('show.bs.modal', function(e) {
-  const btn = e.relatedTarget;
-  try {
-    const payload = JSON.parse(btn.dataset.payload);
-    document.getElementById('payloadContent').textContent = JSON.stringify(payload, null, 2);
-  } catch {
-    document.getElementById('payloadContent').textContent = btn.dataset.payload;
+(function () {
+  function esc(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
-});
+
+  function renderVal(v, depth) {
+    if (v === null || v === undefined) return '<span class="pv-null">null</span>';
+    if (typeof v === 'boolean') return `<span class="${v?'pv-bool-t':'pv-bool-f'}">${v}</span>`;
+    if (typeof v === 'number')  return `<span class="pv-num">${v}</span>`;
+    if (typeof v === 'string') {
+      if (!v) return '<span class="pv-null">(vazio)</span>';
+      return `<span class="pv-str">${esc(v)}</span>`;
+    }
+    if (Array.isArray(v)) {
+      if (!v.length) return '<span class="pv-null">[]</span>';
+      if (v.every(i => typeof i !== 'object' || i === null)) {
+        return v.map(i => renderVal(i, depth)).join('<span class="text-muted">, </span>');
+      }
+      return '<ul class="mb-0 ps-3 mt-1">' + v.map(i => `<li>${renderVal(i, depth+1)}</li>`).join('') + '</ul>';
+    }
+    if (typeof v === 'object') {
+      const entries = Object.entries(v);
+      if (!entries.length) return '<span class="pv-null">{}</span>';
+      const rows = entries.map(([k, val]) =>
+        `<tr><td class="pv-key">${esc(k)}</td><td class="pv-val">${renderVal(val, depth+1)}</td></tr>`
+      ).join('');
+      return `<div class="pv-nested"><table class="table table-sm table-borderless mb-0"><tbody>${rows}</tbody></table></div>`;
+    }
+    return esc(String(v));
+  }
+
+  const SECTION_STYLES = {
+    data:     { border: '#0d6efd', bg: '#e7f1ff', label: 'Dados do Deal / Documento',  icon: 'bi-file-earmark-text' },
+    meta:     { border: '#6c757d', bg: '#f8f9fa', label: 'Metadados do Webhook',        icon: 'bi-info-circle' },
+    previous: { border: '#ffc107', bg: '#fff9e6', label: 'Valores Anteriores',           icon: 'bi-arrow-counterclockwise' },
+    event:    { border: '#6f42c1', bg: '#f3eeff', label: 'Evento',                       icon: 'bi-lightning' },
+    document: { border: '#20c997', bg: '#e6faf4', label: 'Documento',                   icon: 'bi-file-check' },
+  };
+
+  function renderSection(key, val) {
+    const style = SECTION_STYLES[key] || { border: '#adb5bd', bg: '#f8f9fa', label: key, icon: 'bi-braces' };
+    const bodyId = 'psec_' + Math.random().toString(36).slice(2);
+    return `
+      <div class="payload-section" style="border-color:${style.border}; background:${style.bg}">
+        <div class="section-header d-flex align-items-center gap-2"
+             style="color:${style.border}"
+             onclick="document.getElementById('${bodyId}').classList.toggle('d-none')">
+          <i class="bi ${style.icon}"></i>
+          <span>${style.label}</span>
+          <span class="badge ms-auto" style="background:${style.border}">${key}</span>
+          <i class="bi bi-chevron-down small"></i>
+        </div>
+        <div class="section-body" id="${bodyId}">
+          ${renderVal(val, 0)}
+        </div>
+      </div>`;
+  }
+
+  function renderFormatted(payload) {
+    const topKeys = Object.keys(payload);
+    return topKeys.map(k => renderSection(k, payload[k])).join('');
+  }
+
+  function syntaxHighlight(json) {
+    return esc(json).replace(
+      /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+      function(m) {
+        if (/^"/.test(m)) return /:$/.test(m) ? `<span class="json-key">${m}</span>` : `<span class="json-string">${m}</span>`;
+        if (/true|false/.test(m)) return `<span class="json-bool">${m}</span>`;
+        if (/null/.test(m)) return `<span class="json-null">${m}</span>`;
+        return `<span class="json-number">${m}</span>`;
+      }
+    );
+  }
+
+  const modal   = document.getElementById('modalPayload');
+  const fmtDiv  = document.getElementById('payloadFormatted');
+  const rawPre  = document.getElementById('payloadRaw');
+  let currentPayload = null;
+
+  modal?.addEventListener('show.bs.modal', function(e) {
+    try { currentPayload = JSON.parse(e.relatedTarget.dataset.payload); }
+    catch { currentPayload = { raw: e.relatedTarget.dataset.payload }; }
+    // reset to formatted view
+    document.getElementById('viewFormatted').checked = true;
+    fmtDiv.style.display = ''; rawPre.style.display = 'none';
+    fmtDiv.innerHTML = renderFormatted(currentPayload);
+    rawPre.innerHTML = syntaxHighlight(JSON.stringify(currentPayload, null, 2));
+  });
+
+  document.querySelectorAll('input[name="payloadViewMode"]').forEach(radio => {
+    radio.addEventListener('change', function() {
+      if (this.value === 'formatted') {
+        fmtDiv.style.display = ''; rawPre.style.display = 'none';
+      } else {
+        fmtDiv.style.display = 'none'; rawPre.style.display = '';
+      }
+    });
+  });
+})();
 </script>
