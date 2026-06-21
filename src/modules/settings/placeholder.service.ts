@@ -22,6 +22,9 @@ export const SOURCE_FIELDS: SourceField[] = [
   { field: 'customer.country',                    label: 'País',                                            group: 'Endereço' },
   { field: 'pipedriveDeal.tipoServico',           label: 'Tipo de Serviço (Pipedrive)',                     group: 'Deal' },
   { field: 'pipedriveDeal.title',                 label: 'Título do Deal',                                  group: 'Deal' },
+  { field: 'pipedriveDeal.value',                 label: 'Valor do contrato (número bruto, ex: 6000)',      group: 'Deal' },
+  { field: 'pipedriveDeal.valueFormatted',        label: 'Valor do contrato formatado (ex: R$ 6.000,00)',   group: 'Deal' },
+  { field: 'pipedriveDeal.currency',              label: 'Moeda (ex: BRL)',                                 group: 'Deal' },
 ];
 
 export const CONTRACT_TYPE_LABELS: Record<string, string> = {
@@ -44,7 +47,18 @@ function resolveSingleField(field: string, customer: any, deal: any): string {
   const obj = field.substring(0, dot);
   const prop = field.substring(dot + 1);
   if (obj === 'customer') return String(customer?.[prop] ?? '').trim();
-  if (obj === 'pipedriveDeal') return String(deal?.[prop] ?? '').trim();
+  if (obj === 'pipedriveDeal') {
+    if (prop === 'valueFormatted') {
+      const num = Number(deal?.value ?? 0);
+      const currency = String(deal?.currency ?? 'BRL');
+      try {
+        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(num);
+      } catch {
+        return `${currency} ${num.toFixed(2).replace('.', ',')}`;
+      }
+    }
+    return String(deal?.[prop] ?? '').trim();
+  }
   return '';
 }
 
