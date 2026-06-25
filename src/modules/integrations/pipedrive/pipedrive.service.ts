@@ -6,6 +6,7 @@ import {
   fetchOrganization,
   fetchPerson,
   fetchOrganizationFields,
+  fetchPersonFields,
   fetchDealFields,
   fetchDeal,
   fetchPipedriveUser,
@@ -48,20 +49,38 @@ function checkbox(value: string | null | undefined, match: string): string {
 
 /**
  * Extrai campos customizados mapeados da Pessoa (PF) do Pipedrive.
- * Os hashes são os identificadores dos campos customizados configurados.
+ * personFields é usado para resolver valores de campos enum (ex: Estado Civil, Nacionalidade)
+ * que podem chegar como IDs numéricos em vez de labels.
  */
-function extractPersonFields(person: Record<string, unknown> | null): Record<string, string | null> | null {
+function extractPersonFields(
+  person: Record<string, unknown> | null,
+  personFields: PipedriveField[] = [],
+): Record<string, string | null> | null {
   if (!person) return null;
+
+  // Resolve enum de pessoa — similar ao deal, alguns campos retornam { id, type } ou ID numérico
+  const resolvePersonEnum = (key: string) =>
+    resolveDealEnumValue(person[key], personFields, key) ?? getField(person, key);
+
+  // Pipedrive v1 REST API retorna o endereço como string plana em postal_address
+  // e também disponibiliza postal_address_formatted_address com o formato Google Maps
+  const postalAddr = person.postal_address;
+  const enderecoCompleto = String(
+    person.postal_address_formatted_address ??
+    (postalAddr && typeof postalAddr === 'object' ? (postalAddr as any).value : postalAddr) ??
+    ''
+  ).trim() || null;
+
   return {
     nome:             String(person.name ?? '').trim() || null,
     rg:               getField(person, 'e7fc57aab0020e16449f95f9fd303cd567bc3900'),
     cpf:              getField(person, 'd32b3fb23c2e5c30136ddb139782f4e7b89350f0'),
     dataExpDoc:       formatDateBR(getField(person, 'bfb76ab459ed309a2fb55194e91dedfd571eb851')),
     dataNascimento:   formatDateBR(String(person.birthday ?? '').trim() || null),
-    estadoCivil:      getField(person, 'bfb8f06977d515c491c52ace121f13d86a8e5313'),
-    nacionalidade:    getField(person, 'fc4b094f50c43a6ef6e5449235e14dbc63330906'),
+    estadoCivil:      resolvePersonEnum('bfb8f06977d515c491c52ace121f13d86a8e5313'),
+    nacionalidade:    resolvePersonEnum('fc4b094f50c43a6ef6e5449235e14dbc63330906'),
     profissao:        String(person.job_title ?? '').trim() || null,
-    enderecoCompleto: String((person.postal_address as any)?.value ?? '').trim() || null,
+    enderecoCompleto,
     telefone:         (
       extractPrimaryPhone((person.phones ?? person.phone) as any) ?? ''
     ).replace(/\D/g, '') || null,
@@ -340,10 +359,11 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload, config: Compan
   }
 
   // Busca dados enriquecidos usando o token da empresa correta, incluindo dados completos do deal via API
-  const [org, person, orgFields, ownerUser, dealFields, dealApiData] = await Promise.all([
+  const [org, person, orgFields, personFields, ownerUser, dealFields, dealApiData] = await Promise.all([
     dealData.org_id ? fetchOrganization(dealData.org_id, config) : Promise.resolve(null),
     dealData.person_id ? fetchPerson(dealData.person_id, config) : Promise.resolve(null),
     fetchOrganizationFields(config),
+    fetchPersonFields(config),
     dealData.owner_id ? fetchPipedriveUser(dealData.owner_id, config) : Promise.resolve(null),
     fetchDealFields(config),
     fetchDeal(dealId, config),
@@ -358,7 +378,7 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload, config: Compan
   const orgLabeled = org ? buildLabeledFields(org as Record<string, unknown>, orgFields) : null;
 
   // Extrai campos customizados mapeados de person, org e deal para uso nos templates Clicksign
-  const personExtracted = extractPersonFields(person as Record<string, unknown> | null);
+  const personExtracted = extractPersonFields(person as Record<string, unknown> | null, personFields);
   const orgExtracted    = extractOrgFields(org as Record<string, unknown> | null);
   const dealExtracted   = extractDealFields(
     (dealApiData ?? dealData) as Record<string, unknown>,
