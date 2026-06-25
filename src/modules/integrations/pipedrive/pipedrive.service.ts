@@ -54,14 +54,14 @@ function extractPersonFields(person: Record<string, unknown> | null): Record<str
   if (!person) return null;
   return {
     nome:             String(person.name ?? '').trim() || null,
-    rg:               getField(person, '465868038838f59fc1ce89544fd33d317ece0914'),
-    cpf:              getField(person, 'c330f58646537661f1f7acad789b10aacbacf64a'),
-    dataExpDoc:       formatDateBR(getField(person, 'a9343bad250fa3ae7621761c337e3fbcffb7c1d5')),
-    dataNascimento:   formatDateBR(getField(person, 'ae3159cc9ea3802475f7e89841b104f8e1e32902')),
-    estadoCivil:      getField(person, '8458f942aeec711b47722ac28963335848a8650d'),
-    nacionalidade:    getField(person, 'a3090e36f044d65cdd94a2aaf5a8f84e4f8d3f44'),
-    profissao:        getField(person, 'c7318bfe9ebaf33ab01ed9b8f17640c63a77c262'),
-    enderecoCompleto: getField(person, 'b843cb1aae11801b30d3a87765fd9c0e8b38df74'),
+    rg:               getField(person, 'e7fc57aab0020e16449f95f9fd303cd567bc3900'),
+    cpf:              getField(person, 'd32b3fb23c2e5c30136ddb139782f4e7b89350f0'),
+    dataExpDoc:       formatDateBR(getField(person, 'bfb76ab459ed309a2fb55194e91dedfd571eb851')),
+    dataNascimento:   formatDateBR(String(person.birthday ?? '').trim() || null),
+    estadoCivil:      getField(person, 'bfb8f06977d515c491c52ace121f13d86a8e5313'),
+    nacionalidade:    getField(person, 'fc4b094f50c43a6ef6e5449235e14dbc63330906'),
+    profissao:        String(person.job_title ?? '').trim() || null,
+    enderecoCompleto: String((person.postal_address as any)?.value ?? '').trim() || null,
     telefone:         (
       extractPrimaryPhone((person.phones ?? person.phone) as any) ?? ''
     ).replace(/\D/g, '') || null,
@@ -76,11 +76,11 @@ function extractOrgFields(org: Record<string, unknown> | null): Record<string, s
   if (!org) return null;
   return {
     razaoSocial:  String(org.name ?? '').trim() || null,
-    cnpj:         getField(org, '245b177d9101ff179087327259285e980706139e'),
-    dataFundacao: formatDateBR(getField(org, '2f9a15bcb942e940f022aafc8b7fed39cbac151b')),
-    telefone:     getField(org, '8ed4a3040b06bbd0d66152cd268bce10dff40846'),
-    email:        getField(org, 'e1c122bdfafbf3d5317a08edc3d10da609e8006d'),
-    endereco:     typeof org.address === 'string' ? org.address || null : null,
+    cnpj:         getField(org, 'eb06c19bb46f8b85f16d90725607ba2792d36dd3'),
+    dataFundacao: formatDateBR(getField(org, '39351d8120d9270c900c5dfdfef1a4086590d032')),
+    telefone:     getField(org, '70e69cb06e44393a1ef1549c9d243b9920a44f34'),
+    email:        getField(org, '319c9ecd4737f38ac936a2d26e16418ab6c531ec'),
+    endereco:     String((org.address as any)?.value ?? org.address ?? '').trim() || null,
   };
 }
 
@@ -97,24 +97,24 @@ function extractDealFields(
   const resolveEnum = (key: string) =>
     resolveDealEnumValue(dealApiData[key], dealFields, key) ?? getField(dealApiData, key);
 
-  const vigencia      = resolveEnum('fd6855f042ade36034d88bb4730b17fdb576c19a');
-  const honorarioFixo = resolveEnum('4e92da9183029c377cc0e6bd5eb1508072600bc9');
-  const adExitum      = resolveEnum('b314974a79d1f9daffe68b03d877b0f9c3d9ce5f');
+  const vigencia      = resolveEnum('3e2d76c1009411d8e9916ba23441a22a0fe80979');
+  const honorarioFixo = resolveEnum('30009486f55f799f987d9a180c5993fc5c252179');
+  const adExitum      = resolveEnum('10ba488ab670e19673ea1e1177e922ad1c28a4ba');
 
   return {
     vigencia,
     seVigenciaDeterminada:   checkbox(vigencia, 'Determinada'),
     seVigenciaIndeterminada: checkbox(vigencia, 'Indeterminada'),
-    duracaoVigencia:         getField(dealApiData, '4b86518c17d19243df2d2858f47d9a81a75159e9'),
-    terminoVigencia:         formatDateBR(getField(dealApiData, 'c532ebe8ab847f17c53d3e36122b0abbf350437a')),
-    areaContrato:            getField(dealApiData, 'dd362d89cdf8ad435b210a74633d241995837eec'),
-    descricaoContrato:       getField(dealApiData, '25a6715f890c0d927362304d01825c87d2c0f2af'),
+    duracaoVigencia:         getField(dealApiData, 'a7494cdde57361f80ac8342c44703e8989a6bc26'),
+    terminoVigencia:         formatDateBR(getField(dealApiData, '54b2544e09438592163b9615d5001e4a237e0fb0')),
+    areaContrato:            getField(dealApiData, 'ead1c6fde39a838bc53b85de8ca50a0d5a57f722'),
+    descricaoContrato:       getField(dealApiData, 'ae012a95068cf8f9dfc3bafb080a6b3e2927b472'),
     honorarioFixo,
     seHonorarioFixo:         checkbox(honorarioFixo, 'Sim'),
     adExitum,
     seAdExitum:              checkbox(adExitum, 'Sim'),
-    detalhesHonorarioFixo:   getField(dealApiData, '4cad99e50777da266491d028a11d94c086f06240'),
-    porcentagemAdExitum:     getField(dealApiData, 'ce4e39d882908ace08c3d1c12face11c000e880b'),
+    detalhesHonorarioFixo:   getField(dealApiData, 'b69c99dacbda5fd4589b35efc9944440da74b7f8'),
+    porcentagemAdExitum:     getField(dealApiData, '297bb6361dd9ea87b494ef42374f9c252c1b4da4'),
   };
 }
 
