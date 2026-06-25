@@ -53,9 +53,20 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
 </div>
 
 <!-- Info cards -->
+<%
+  const personExtracted = contract.customer.pipedrivePersonRaw && contract.customer.pipedrivePersonRaw._extracted
+    ? contract.customer.pipedrivePersonRaw._extracted : null;
+  const orgExtracted = contract.customer.pipedriveOrgRaw && contract.customer.pipedriveOrgRaw._extracted
+    ? contract.customer.pipedriveOrgRaw._extracted : null;
+  const dealExtracted = contract.pipedriveDeal && contract.pipedriveDeal.rawPayload && contract.pipedriveDeal.rawPayload._extracted
+    ? contract.pipedriveDeal.rawPayload._extracted : null;
+  const tipoServico = (contract.pipedriveDeal && contract.pipedriveDeal.tipoServico) ? contract.pipedriveDeal.tipoServico : '';
+  const isPF = tipoServico.includes('PF');
+%>
 <div class="row g-3 mb-4 mt-2">
 
-  <!-- Dados do cliente/organização -->
+  <!-- Dados da Empresa (PJ) — só exibe se há org vinculada -->
+  <% if (!isPF || contract.customer.pipedriveOrgId) { %>
   <div class="col-12">
     <div class="card">
       <div class="card-header d-flex align-items-center justify-content-between">
@@ -70,31 +81,45 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
         <div class="row g-3">
           <div class="col-12 col-md-4">
             <div class="small text-muted">Razão Social</div>
-            <div class="fw-semibold"><%= contract.customer.name %></div>
+            <div class="fw-semibold"><%= (orgExtracted && orgExtracted.razaoSocial) ? orgExtracted.razaoSocial : contract.customer.name %></div>
           </div>
-          <% if (contract.customer.document) { %>
+          <%- ((orgExtracted && orgExtracted.cnpj) || contract.customer.document) ? `
           <div class="col-12 col-md-4">
-            <div class="small text-muted">CNPJ / CPF</div>
-            <div class="fw-semibold"><%= contract.customer.document %></div>
+            <div class="small text-muted">CNPJ</div>
+            <div class="fw-semibold">${(orgExtracted && orgExtracted.cnpj) ? orgExtracted.cnpj : contract.customer.document}</div>
+          </div>` : '' %>
+          <% if (orgExtracted && orgExtracted.dataFundacao) { %>
+          <div class="col-12 col-md-4">
+            <div class="small text-muted">Data de Fundação</div>
+            <div class="fw-semibold"><%= orgExtracted.dataFundacao %></div>
           </div>
           <% } %>
-          <% if (contract.customer.email) { %>
+          <%
+            const orgEmailDisplay = (orgExtracted && orgExtracted.email) ? orgExtracted.email : contract.customer.email;
+          %>
+          <% if (orgEmailDisplay) { %>
           <div class="col-12 col-md-4">
             <div class="small text-muted">E-mail</div>
-            <div><a href="mailto:<%= contract.customer.email %>"><%= contract.customer.email %></a></div>
+            <div><a href="mailto:<%= orgEmailDisplay %>"><%= orgEmailDisplay %></a></div>
           </div>
           <% } %>
-          <% if (contract.customer.phone) { %>
+          <%
+            const orgPhoneDisplay = (orgExtracted && orgExtracted.telefone) ? orgExtracted.telefone : contract.customer.phone;
+          %>
+          <% if (orgPhoneDisplay) { %>
           <div class="col-12 col-md-4">
             <div class="small text-muted">Telefone</div>
-            <div><%= contract.customer.phone %></div>
+            <div><%= orgPhoneDisplay %></div>
           </div>
           <% } %>
-          <% if (contract.customer.address || contract.customer.city) { %>
+          <%
+            const orgEnderecoDisplay = (orgExtracted && orgExtracted.endereco) ? orgExtracted.endereco : contract.customer.address;
+          %>
+          <% if (orgEnderecoDisplay || contract.customer.city) { %>
           <div class="col-12 col-md-8">
             <div class="small text-muted">Endereço</div>
             <div>
-              <%= contract.customer.address || '' %>
+              <%= orgEnderecoDisplay || '' %>
               <% if (contract.customer.city) { %><span class="text-muted"> — <%= contract.customer.city %><% if (contract.customer.state) { %>/<%= contract.customer.state %><% } %></span><% } %>
               <% if (contract.customer.zipCode) { %><span class="text-muted"> CEP: <%= contract.customer.zipCode %></span><% } %>
             </div>
@@ -103,7 +128,6 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
         </div>
 
         <%
-          // Mostra campos do Pipedrive que ainda não foram mapeados (apenas admin)
           const orgRaw = contract.customer.pipedriveOrgRaw;
           const labeled = orgRaw && orgRaw._labeled ? orgRaw._labeled : null;
           const hasUnmapped = labeled && Object.keys(labeled).length > 0;
@@ -127,47 +151,95 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
                 <% } %>
                 <% }); %>
               </div>
-              <div class="mt-2 text-muted" style="font-size:.75rem">
-                <i class="bi bi-info-circle me-1"></i>
-                Se o CNPJ aparece acima mas não está mapeado automaticamente, me informe o nome exato do campo para configurar o mapeamento.
-              </div>
             </div>
           </div>
         </div>
         <% } %>
-
       </div>
     </div>
   </div>
+  <% } %>
 
-  <!-- Dados do contato responsável -->
-  <% if (contract.customer.contactName || contract.customer.contactEmail) { %>
+  <!-- Contratante PF (pessoa física) ou Representante (PJ) -->
+  <% const hasPersonData = contract.customer.contactName || contract.customer.contactEmail || personExtracted; %>
+  <% if (hasPersonData) { %>
   <div class="col-12 col-md-6">
     <div class="card h-100">
       <div class="card-header d-flex align-items-center justify-content-between">
-        <span><i class="bi bi-person me-2"></i>Contato Responsável</span>
+        <span><i class="bi bi-person me-2"></i><%= isPF ? 'Contratante PF' : 'Representante' %></span>
         <% if (contract.customer.pipedrivePersonId) { %>
         <span class="badge bg-light text-dark border small">ID: <%= contract.customer.pipedrivePersonId %></span>
         <% } %>
       </div>
       <div class="card-body">
         <div class="row g-2">
-          <% if (contract.customer.contactName) { %>
-          <div class="col-12">
+          <% const personName = (personExtracted && personExtracted.nome) ? personExtracted.nome : contract.customer.contactName; %>
+          <% if (personName) { %>
+          <div class="col-12 col-md-6">
             <div class="small text-muted">Nome</div>
-            <div class="fw-semibold"><%= contract.customer.contactName %></div>
+            <div class="fw-semibold"><%= personName %></div>
           </div>
           <% } %>
-          <% if (contract.customer.contactEmail) { %>
-          <div class="col-12">
+          <% if (personExtracted && personExtracted.cpf) { %>
+          <div class="col-12 col-md-6">
+            <div class="small text-muted">CPF</div>
+            <div><%= personExtracted.cpf %></div>
+          </div>
+          <% } %>
+          <% if (personExtracted && personExtracted.rg) { %>
+          <div class="col-12 col-md-6">
+            <div class="small text-muted">RG</div>
+            <div><%= personExtracted.rg %></div>
+          </div>
+          <% } %>
+          <% if (personExtracted && personExtracted.dataExpDoc) { %>
+          <div class="col-12 col-md-6">
+            <div class="small text-muted">Data de Expedição</div>
+            <div><%= personExtracted.dataExpDoc %></div>
+          </div>
+          <% } %>
+          <% if (personExtracted && personExtracted.dataNascimento) { %>
+          <div class="col-12 col-md-6">
+            <div class="small text-muted">Data de Nascimento</div>
+            <div><%= personExtracted.dataNascimento %></div>
+          </div>
+          <% } %>
+          <% if (personExtracted && personExtracted.estadoCivil) { %>
+          <div class="col-12 col-md-6">
+            <div class="small text-muted">Estado Civil</div>
+            <div><%= personExtracted.estadoCivil %></div>
+          </div>
+          <% } %>
+          <% if (personExtracted && personExtracted.nacionalidade) { %>
+          <div class="col-12 col-md-6">
+            <div class="small text-muted">Nacionalidade</div>
+            <div><%= personExtracted.nacionalidade %></div>
+          </div>
+          <% } %>
+          <% if (personExtracted && personExtracted.profissao) { %>
+          <div class="col-12 col-md-6">
+            <div class="small text-muted">Profissão</div>
+            <div><%= personExtracted.profissao %></div>
+          </div>
+          <% } %>
+          <% const personEmail = (personExtracted && personExtracted.email) ? personExtracted.email : contract.customer.contactEmail; %>
+          <% if (personEmail) { %>
+          <div class="col-12 col-md-6">
             <div class="small text-muted">E-mail</div>
-            <div><a href="mailto:<%= contract.customer.contactEmail %>"><%= contract.customer.contactEmail %></a></div>
+            <div><a href="mailto:<%= personEmail %>"><%= personEmail %></a></div>
           </div>
           <% } %>
-          <% if (contract.customer.contactPhone) { %>
-          <div class="col-12">
+          <% const personPhone = (personExtracted && personExtracted.telefone) ? personExtracted.telefone : contract.customer.contactPhone; %>
+          <% if (personPhone) { %>
+          <div class="col-12 col-md-6">
             <div class="small text-muted">Telefone</div>
-            <div><%= contract.customer.contactPhone %></div>
+            <div><%= personPhone %></div>
+          </div>
+          <% } %>
+          <% if (personExtracted && personExtracted.enderecoCompleto) { %>
+          <div class="col-12">
+            <div class="small text-muted">Endereço</div>
+            <div><%= personExtracted.enderecoCompleto %></div>
           </div>
           <% } %>
         </div>
@@ -176,8 +248,8 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
   </div>
   <% } %>
 
-  <!-- Info contrato -->
-  <div class="col-12 col-md-<%= (contract.customer.contactName || contract.customer.contactEmail) ? '6' : '12' %>">
+  <!-- Dados do Contrato -->
+  <div class="col-12 col-md-<%= hasPersonData ? '6' : '12' %>">
     <div class="card h-100">
       <div class="card-header"><i class="bi bi-file-earmark-text me-2"></i>Dados do Contrato</div>
       <div class="card-body">
@@ -212,6 +284,95 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
       </div>
     </div>
   </div>
+
+  <!-- Condições Contratuais (campos customizados do Deal) -->
+  <% if (dealExtracted) { %>
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-clipboard-check me-2"></i>Condições Contratuais</div>
+      <div class="card-body">
+        <div class="row g-3">
+          <% if (dealExtracted.vigencia) { %>
+          <div class="col-12 col-md-3">
+            <div class="small text-muted">Vigência</div>
+            <div class="fw-semibold mt-1">
+              <% if (dealExtracted.vigencia === 'Determinada') { %>
+              <span class="badge bg-warning text-dark"><i class="bi bi-calendar-range me-1"></i>Determinada</span>
+              <% } else { %>
+              <span class="badge bg-secondary"><i class="bi bi-infinity me-1"></i>Indeterminada</span>
+              <% } %>
+            </div>
+          </div>
+          <% } %>
+          <% if (dealExtracted.duracaoVigencia) { %>
+          <div class="col-12 col-md-3">
+            <div class="small text-muted">Duração</div>
+            <div class="fw-semibold"><%= dealExtracted.duracaoVigencia %></div>
+          </div>
+          <% } %>
+          <% if (dealExtracted.terminoVigencia) { %>
+          <div class="col-12 col-md-3">
+            <div class="small text-muted">Término</div>
+            <div class="fw-semibold"><%= dealExtracted.terminoVigencia %></div>
+          </div>
+          <% } %>
+          <% if (dealExtracted.areaContrato) { %>
+          <div class="col-12 col-md-3">
+            <div class="small text-muted">Área do Contrato</div>
+            <div class="fw-semibold"><%= dealExtracted.areaContrato %></div>
+          </div>
+          <% } %>
+          <% if (dealExtracted.descricaoContrato) { %>
+          <div class="col-12">
+            <div class="small text-muted">Descrição do Contrato</div>
+            <div class="text-break"><%= dealExtracted.descricaoContrato %></div>
+          </div>
+          <% } %>
+          <% if (dealExtracted.honorarioFixo || dealExtracted.adExitum) { %>
+          <div class="col-12">
+            <hr class="my-1">
+            <div class="small fw-semibold text-muted mb-2">Honorários</div>
+            <div class="row g-2">
+              <% if (dealExtracted.honorarioFixo) { %>
+              <div class="col-12 col-md-3">
+                <div class="small text-muted">Honorário Fixo</div>
+                <% if (dealExtracted.honorarioFixo === 'Sim') { %>
+                <span class="text-success fw-semibold"><i class="bi bi-check-circle-fill me-1"></i>Sim</span>
+                <% } else { %>
+                <span class="text-muted"><i class="bi bi-x-circle me-1"></i>Não</span>
+                <% } %>
+              </div>
+              <% } %>
+              <% if (dealExtracted.honorarioFixo === 'Sim' && dealExtracted.detalhesHonorarioFixo) { %>
+              <div class="col-12 col-md-9">
+                <div class="small text-muted">Detalhes do Honorário</div>
+                <div><%= dealExtracted.detalhesHonorarioFixo %></div>
+              </div>
+              <% } %>
+              <% if (dealExtracted.adExitum) { %>
+              <div class="col-12 col-md-3">
+                <div class="small text-muted">Ad Exitum</div>
+                <% if (dealExtracted.adExitum === 'Sim') { %>
+                <span class="text-success fw-semibold"><i class="bi bi-check-circle-fill me-1"></i>Sim</span>
+                <% } else { %>
+                <span class="text-muted"><i class="bi bi-x-circle me-1"></i>Não</span>
+                <% } %>
+              </div>
+              <% } %>
+              <% if (dealExtracted.adExitum === 'Sim' && dealExtracted.porcentagemAdExitum) { %>
+              <div class="col-12 col-md-3">
+                <div class="small text-muted">Porcentagem Ad Exitum</div>
+                <div class="fw-semibold"><%= dealExtracted.porcentagemAdExitum %></div>
+              </div>
+              <% } %>
+            </div>
+          </div>
+          <% } %>
+        </div>
+      </div>
+    </div>
+  </div>
+  <% } %>
 
 </div>
 
