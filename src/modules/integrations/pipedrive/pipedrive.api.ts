@@ -148,6 +148,24 @@ export async function fetchDealFields(ctx?: PipedriveApiContext): Promise<Pipedr
   return data ?? [];
 }
 
+/** Objeto completo de um deal via GET /deals/{id}. Campos customizados chegam no top-level com seu hash como chave. */
+export interface PipedriveDealFull {
+  id: number;
+  title: string;
+  value?: number;
+  currency?: string;
+  stage_id?: number;
+  stage_name?: string;
+  status?: string;
+  [key: string]: unknown;
+}
+
+export async function fetchDeal(dealId: number | string, ctx?: PipedriveApiContext): Promise<PipedriveDealFull | null> {
+  const data = await apiGet<PipedriveDealFull>(`/deals/${dealId}`, ctx);
+  if (data) logger.info(`Pipedrive: deal ${dealId} recuperado via API — "${data.title}"`);
+  return data;
+}
+
 /**
  * Resolve o valor de um campo enum do Pipedrive.
  * No webhook v2, enums chegam como { id: number, type: "enum" } em vez do label.

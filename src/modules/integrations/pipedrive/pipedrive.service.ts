@@ -7,6 +7,7 @@ import {
   fetchPerson,
   fetchOrganizationFields,
   fetchDealFields,
+  fetchDeal,
   fetchPipedriveUser,
   resolveDealEnumValue,
   extractPrimaryEmail,
@@ -15,10 +16,107 @@ import {
   buildLabeledFields,
   detectDocument,
   type PipedriveApiContext,
+  type PipedriveField,
 } from './pipedrive.api';
 
 // API key do campo customizado "tipo_servico" no Pipedrive
 const TIPO_SERVICO_FIELD = 'b9e2317c3051565d2ad79d04ce9d8b9143ac1fc8';
+
+// ─── Helpers de extração de campos customizados ───────────────────────────────
+
+/** Retorna o valor de um campo customizado do Pipedrive pelo hash da chave, ou null se vazio. */
+function getField(obj: Record<string, unknown> | null | undefined, key: string): string | null {
+  if (!obj) return null;
+  const v = obj[key];
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'object') return null; // enum { id, type } do webhook v2 — precisa resolução separada
+  return String(v).trim() || null;
+}
+
+/** Converte data ISO (YYYY-MM-DD) para DD/MM/AAAA. Retorna o valor original se não for ISO. */
+function formatDateBR(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[3]}/${m[2]}/${m[1]}`;
+  return value;
+}
+
+/** Gera ☑ se o valor bate com match, caso contrário ☐. */
+function checkbox(value: string | null | undefined, match: string): string {
+  return value === match ? '☑' : '☐';
+}
+
+/**
+ * Extrai campos customizados mapeados da Pessoa (PF) do Pipedrive.
+ * Os hashes são os identificadores dos campos customizados configurados.
+ */
+function extractPersonFields(person: Record<string, unknown> | null): Record<string, string | null> | null {
+  if (!person) return null;
+  return {
+    nome:             String(person.name ?? '').trim() || null,
+    rg:               getField(person, '465868038838f59fc1ce89544fd33d317ece0914'),
+    cpf:              getField(person, 'c330f58646537661f1f7acad789b10aacbacf64a'),
+    dataExpDoc:       formatDateBR(getField(person, 'a9343bad250fa3ae7621761c337e3fbcffb7c1d5')),
+    dataNascimento:   formatDateBR(getField(person, 'ae3159cc9ea3802475f7e89841b104f8e1e32902')),
+    estadoCivil:      getField(person, '8458f942aeec711b47722ac28963335848a8650d'),
+    nacionalidade:    getField(person, 'a3090e36f044d65cdd94a2aaf5a8f84e4f8d3f44'),
+    profissao:        getField(person, 'c7318bfe9ebaf33ab01ed9b8f17640c63a77c262'),
+    enderecoCompleto: getField(person, 'b843cb1aae11801b30d3a87765fd9c0e8b38df74'),
+    telefone:         (
+      extractPrimaryPhone((person.phones ?? person.phone) as any) ?? ''
+    ).replace(/\D/g, '') || null,
+    email:            extractPrimaryEmail((person.emails ?? person.email) as any),
+  };
+}
+
+/**
+ * Extrai campos customizados mapeados da Organização (PJ) do Pipedrive.
+ */
+function extractOrgFields(org: Record<string, unknown> | null): Record<string, string | null> | null {
+  if (!org) return null;
+  return {
+    razaoSocial:  String(org.name ?? '').trim() || null,
+    cnpj:         getField(org, '245b177d9101ff179087327259285e980706139e'),
+    dataFundacao: formatDateBR(getField(org, '2f9a15bcb942e940f022aafc8b7fed39cbac151b')),
+    telefone:     getField(org, '8ed4a3040b06bbd0d66152cd268bce10dff40846'),
+    email:        getField(org, 'e1c122bdfafbf3d5317a08edc3d10da609e8006d'),
+    endereco:     typeof org.address === 'string' ? org.address || null : null,
+  };
+}
+
+/**
+ * Extrai e computa campos do Deal (contrato) a partir dos dados da API Pipedrive.
+ * Campos enum são resolvidos para seu label legível via dealFields.
+ */
+function extractDealFields(
+  dealApiData: Record<string, unknown> | null,
+  dealFields: PipedriveField[],
+): Record<string, string | null> | null {
+  if (!dealApiData) return null;
+
+  const resolveEnum = (key: string) =>
+    resolveDealEnumValue(dealApiData[key], dealFields, key) ?? getField(dealApiData, key);
+
+  const vigencia      = resolveEnum('fd6855f042ade36034d88bb4730b17fdb576c19a');
+  const honorarioFixo = resolveEnum('4e92da9183029c377cc0e6bd5eb1508072600bc9');
+  const adExitum      = resolveEnum('b314974a79d1f9daffe68b03d877b0f9c3d9ce5f');
+
+  return {
+    vigencia,
+    seVigenciaDeterminada:   checkbox(vigencia, 'Determinada'),
+    seVigenciaIndeterminada: checkbox(vigencia, 'Indeterminada'),
+    duracaoVigencia:         getField(dealApiData, '4b86518c17d19243df2d2858f47d9a81a75159e9'),
+    terminoVigencia:         formatDateBR(getField(dealApiData, 'c532ebe8ab847f17c53d3e36122b0abbf350437a')),
+    areaContrato:            getField(dealApiData, 'dd362d89cdf8ad435b210a74633d241995837eec'),
+    descricaoContrato:       getField(dealApiData, '25a6715f890c0d927362304d01825c87d2c0f2af'),
+    honorarioFixo,
+    seHonorarioFixo:         checkbox(honorarioFixo, 'Sim'),
+    adExitum,
+    seAdExitum:              checkbox(adExitum, 'Sim'),
+    detalhesHonorarioFixo:   getField(dealApiData, '4cad99e50777da266491d028a11d94c086f06240'),
+    porcentagemAdExitum:     getField(dealApiData, 'ce4e39d882908ace08c3d1c12face11c000e880b'),
+  };
+}
 
 // ─── Configuração multi-empresa ───────────────────────────────────────────────
 
@@ -241,13 +339,14 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload, config: Compan
     return { skipped: true, reason: 'deal já processado anteriormente' };
   }
 
-  // Busca dados enriquecidos usando o token da empresa correta
-  const [org, person, orgFields, ownerUser, dealFields] = await Promise.all([
+  // Busca dados enriquecidos usando o token da empresa correta, incluindo dados completos do deal via API
+  const [org, person, orgFields, ownerUser, dealFields, dealApiData] = await Promise.all([
     dealData.org_id ? fetchOrganization(dealData.org_id, config) : Promise.resolve(null),
     dealData.person_id ? fetchPerson(dealData.person_id, config) : Promise.resolve(null),
     fetchOrganizationFields(config),
     dealData.owner_id ? fetchPipedriveUser(dealData.owner_id, config) : Promise.resolve(null),
     fetchDealFields(config),
+    fetchDeal(dealId, config),
   ]);
 
   const titleFallback = (dealData.title ?? '').replace(/\|.*$/, '').trim() || `Lead #${dealId}`;
@@ -257,7 +356,24 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload, config: Compan
   // Detecta CNPJ nos campos customizados da org
   const detectedDocument = org ? detectDocument(org as Record<string, unknown>, orgFields) : null;
   const orgLabeled = org ? buildLabeledFields(org as Record<string, unknown>, orgFields) : null;
-  const enrichedOrgRaw = org ? { ...org, _labeled: orgLabeled } : null;
+
+  // Extrai campos customizados mapeados de person, org e deal para uso nos templates Clicksign
+  const personExtracted = extractPersonFields(person as Record<string, unknown> | null);
+  const orgExtracted    = extractOrgFields(org as Record<string, unknown> | null);
+  const dealExtracted   = extractDealFields(
+    (dealApiData ?? dealData) as Record<string, unknown>,
+    dealFields,
+  );
+
+  const enrichedPersonRaw = person
+    ? { ...(person as object), _extracted: personExtracted }
+    : null;
+  const enrichedOrgRaw = org
+    ? { ...(org as object), _labeled: orgLabeled, _extracted: orgExtracted }
+    : null;
+  const enrichedRawPayload = { ...(payload as object), _extracted: dealExtracted };
+
+  console.log(`[PIPEDRIVE] Deal ${dealId}: campos extraídos — person: ${Object.keys(personExtracted ?? {}).length} campos, org: ${Object.keys(orgExtracted ?? {}).length} campos, deal: ${Object.keys(dealExtracted ?? {}).length} campos`);
 
   await createContractFromDeal({
     externalDealId: dealId,
@@ -266,7 +382,7 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload, config: Compan
     currency: dealData.currency ?? 'BRL',
     stageName: dealData.stage_name ?? 'Proposta aceita',
     stageId: currentStageId,
-    rawPayload: payload as object,
+    rawPayload: enrichedRawPayload,
     proposalAcceptedAt: new Date(),
 
     customerName,
@@ -281,12 +397,12 @@ async function handleDealUpdate(payload: PipedriveWebhookPayload, config: Compan
     pipedriveOrgId: dealData.org_id ? String(dealData.org_id) : undefined,
     pipedriveOrgRaw: enrichedOrgRaw as object ?? undefined,
 
-    // Dados do contato (v2 usa "emails"/"phones" no plural)
+    // Dados do contato com campos customizados extraídos (v2 usa "emails"/"phones" no plural)
     contactName: person?.name ?? undefined,
     contactEmail: extractPrimaryEmail(person?.emails ?? person?.email) ?? undefined,
     contactPhone: extractPrimaryPhone(person?.phones ?? person?.phone) ?? undefined,
     pipedrivePersonId: dealData.person_id ? String(dealData.person_id) : undefined,
-    pipedrivePersonRaw: person ? (person as unknown as object) : undefined,
+    pipedrivePersonRaw: enrichedPersonRaw as object ?? undefined,
     pipedriveOwnerName: ownerUser?.name ?? undefined,
     tipoServico: resolveDealEnumValue(dealData.custom_fields?.[TIPO_SERVICO_FIELD], dealFields, TIPO_SERVICO_FIELD) ?? undefined,
     pipedriveCompanyId: String(payload.meta?.company_id ?? '') || undefined,
