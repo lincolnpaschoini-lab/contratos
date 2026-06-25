@@ -167,9 +167,12 @@ export async function fetchDeal(dealId: number | string, ctx?: PipedriveApiConte
 }
 
 /**
- * Resolve o valor de um campo enum do Pipedrive.
- * No webhook v2, enums chegam como { id: number, type: "enum" } em vez do label.
- * Busca o label correspondente nas definições do campo.
+ * Resolve o valor de um campo enum do Pipedrive para seu label legível.
+ *
+ * Trata três formatos que a API pode retornar:
+ *  - Objeto { id, type } → webhook v2
+ *  - String numérica ("12345") → REST API v1 retornando o option ID como string
+ *  - String não-numérica → já é o label, retorna direto
  */
 export function resolveDealEnumValue(
   rawValue: unknown,
@@ -177,9 +180,8 @@ export function resolveDealEnumValue(
   fieldKey: string,
 ): string | null {
   if (!rawValue) return null;
-  if (typeof rawValue === 'string') return rawValue;
 
-  // Formato v2: { id: 31, type: "enum" }
+  // Formato v2 webhook: { id: 31, type: "enum" }
   if (typeof rawValue === 'object' && rawValue !== null && 'id' in rawValue) {
     const enumId = (rawValue as { id: number }).id;
     const field = dealFields.find((f) => f.key === fieldKey);
@@ -188,7 +190,28 @@ export function resolveDealEnumValue(
       logger.info(`Pipedrive: enum "${fieldKey}" id=${enumId} → "${option.label}"`);
       return option.label;
     }
-    logger.warn(`Pipedrive: enum "${fieldKey}" id=${enumId} não encontrado nos dealFields`);
+    logger.warn(`Pipedrive: enum "${fieldKey}" id=${enumId} não encontrado nos fields`);
+    return null;
+  }
+
+  if (typeof rawValue === 'string') {
+    const trimmed = rawValue.trim();
+    if (!trimmed) return null;
+
+    // REST API v1 retorna enums como string numérica — tenta resolver pelo ID
+    const numericId = Number(trimmed);
+    if (!isNaN(numericId) && trimmed !== '') {
+      const field = dealFields.find((f) => f.key === fieldKey);
+      const option = field?.options?.find((o) => o.id === numericId);
+      if (option) {
+        logger.info(`Pipedrive: enum "${fieldKey}" id string="${trimmed}" → "${option.label}"`);
+        return option.label;
+      }
+      // Não encontrou como ID — pode ser um campo texto que contém número
+    }
+
+    // Já é um label string legível
+    return trimmed;
   }
 
   return null;

@@ -126,7 +126,7 @@ function extractDealFields(
     seVigenciaIndeterminada: checkbox(vigencia, 'Indeterminada'),
     duracaoVigencia:         getField(dealApiData, 'a7494cdde57361f80ac8342c44703e8989a6bc26'),
     terminoVigencia:         formatDateBR(getField(dealApiData, '54b2544e09438592163b9615d5001e4a237e0fb0')),
-    areaContrato:            getField(dealApiData, 'ead1c6fde39a838bc53b85de8ca50a0d5a57f722'),
+    areaContrato:            resolveEnum('ead1c6fde39a838bc53b85de8ca50a0d5a57f722'),
     descricaoContrato:       getField(dealApiData, 'ae012a95068cf8f9dfc3bafb080a6b3e2927b472'),
     honorarioFixo,
     seHonorarioFixo:         checkbox(honorarioFixo, 'Sim'),
