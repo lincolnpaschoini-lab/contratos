@@ -250,6 +250,67 @@ const STEP_STATUS_ICON: Record<string, string> = {
   PENDING:     '○',
 };
 
+function buildPipedriveExtractedHtml(tracking: any): string {
+  const c = tracking.customer;
+  const d = tracking.pipedriveDeal;
+  const personExtracted: Record<string, string> = (c?.pipedrivePersonRaw as any)?._extracted ?? {};
+  const orgExtracted: Record<string, string>    = (c?.pipedriveOrgRaw  as any)?._extracted ?? {};
+  const dealExtracted: Record<string, string>   = (d?.rawPayload       as any)?._extracted ?? {};
+
+  const hasPerson = Object.values(personExtracted).some((v) => v && String(v).trim());
+  const hasOrg    = Object.values(orgExtracted).some((v) => v && String(v).trim());
+  const hasDeal   = Object.values(dealExtracted).some((v) => v && String(v).trim());
+
+  const personHtml = hasPerson ? `
+    ${sectionTitle('Contratante PF')}
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Nome', personExtracted.nome || c?.contactName || null)}
+      ${row('CPF', personExtracted.cpf)}
+      ${row('RG', personExtracted.rg)}
+      ${row('Exp. Documento', personExtracted.dataExpDoc)}
+      ${row('Nascimento', personExtracted.dataNascimento)}
+      ${row('Estado Civil', personExtracted.estadoCivil)}
+      ${row('Nacionalidade', personExtracted.nacionalidade)}
+      ${row('Profissão', personExtracted.profissao)}
+      ${row('Endereço', personExtracted.enderecoCompleto)}
+      ${row('Telefone', personExtracted.telefone)}
+      ${row('E-mail', personExtracted.email)}
+    </table>` : '';
+
+  const orgHtml = hasOrg ? `
+    ${sectionTitle('Contratante PJ')}
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Razão Social', orgExtracted.razaoSocial || c?.name || null)}
+      ${row('CNPJ', orgExtracted.cnpj || c?.document || null)}
+      ${row('Data de Fundação', orgExtracted.dataFundacao)}
+      ${row('Endereço', orgExtracted.endereco)}
+      ${row('Telefone', orgExtracted.telefone)}
+      ${row('E-mail', orgExtracted.email)}
+    </table>` : '';
+
+  const vigenciaLabel = dealExtracted.vigencia === 'Determinada'
+    ? '&#9745; Determinada &nbsp; &#9744; Indeterminada'
+    : dealExtracted.vigencia === 'Indeterminada'
+    ? '&#9744; Determinada &nbsp; &#9745; Indeterminada'
+    : (dealExtracted.vigencia || null);
+
+  const dealHtml = hasDeal ? `
+    ${sectionTitle('Condições Contratuais')}
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Vigência', vigenciaLabel)}
+      ${row('Duração', dealExtracted.duracaoVigencia)}
+      ${row('Término', dealExtracted.terminoVigencia)}
+      ${row('Área do Contrato', dealExtracted.areaContrato)}
+      ${row('Descrição', dealExtracted.descricaoContrato)}
+      ${row('Honorário Fixo', dealExtracted.honorarioFixo)}
+      ${row('Detalhes Honorário', dealExtracted.detalhesHonorarioFixo)}
+      ${row('Ad Exitum', dealExtracted.adExitum)}
+      ${row('% Ad Exitum', dealExtracted.porcentagemAdExitum)}
+    </table>` : '';
+
+  return personHtml + orgHtml + dealHtml;
+}
+
 function buildDelayEmailHtml(
   tracking: any,
   delayedStep: any,
@@ -353,6 +414,8 @@ function buildDelayEmailHtml(
       ${row('Proposta aceita em', tracking.proposalAcceptedAt ? formatDate(tracking.proposalAcceptedAt) : null)}
       ${row('Responsável interno', tracking.assignedUser?.name ?? null)}
     </table>
+
+    ${buildPipedriveExtractedHtml(tracking)}
 
     ${sectionTitle('Etapa em Atraso')}
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff5f5;border:1px solid #fca5a5;border-radius:8px;">
@@ -502,6 +565,8 @@ function buildNewLeadEmailHtml(tracking: any, stepLabel: string, contractUrl: st
         ${row('Proposta aceita em', tracking.proposalAcceptedAt ? formatDate(tracking.proposalAcceptedAt) : null)}
         ${row('Responsável interno', tracking.assignedUser?.name ?? null)}
       </table>
+
+      ${buildPipedriveExtractedHtml(tracking)}
 
       ${sectionTitle('Etapas')}
       <table width="100%" cellpadding="0" cellspacing="0">${stepsHtml}</table>
@@ -661,6 +726,8 @@ function buildEmailHtml(tracking: any, actionUrl: string): string {
       ${row('Proposta aceita em', tracking.proposalAcceptedAt ? formatDate(tracking.proposalAcceptedAt) : null)}
       ${row('Responsável interno', tracking.assignedUser?.name ?? null)}
     </table>
+
+    ${buildPipedriveExtractedHtml(tracking)}
 
     ${sectionTitle('Linha do Tempo')}
     <table width="100%" cellpadding="0" cellspacing="0">
