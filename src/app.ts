@@ -15,7 +15,7 @@ import { flashMiddleware } from './shared/middlewares/flash.middleware';
 import { authContextMiddleware } from './shared/middlewares/auth.middleware';
 import { defaultRateLimit } from './shared/middlewares/rate-limit.middleware';
 import {
-  formatDate, formatDateTime, formatRelative, formatCurrency,
+  formatDate, formatDateTime, formatRelative, formatCurrency, daysLate,
   STEP_LABELS, STEP_STATUS_LABELS, CONTRACT_STATUS_LABELS,
   STEP_STATUS_CSS, CONTRACT_STATUS_CSS, stepOrder, STEP_NAMES_ORDERED,
 } from './shared/utils/format';
@@ -80,7 +80,7 @@ app.set('layout', 'layouts/main');
 // Expõe helpers de formatação para todas as views
 app.use((req, res, next) => {
   res.locals.h = {
-    formatDate, formatDateTime, formatRelative, formatCurrency,
+    formatDate, formatDateTime, formatRelative, formatCurrency, daysLate,
     STEP_LABELS, STEP_STATUS_LABELS, CONTRACT_STATUS_LABELS,
     STEP_STATUS_CSS, CONTRACT_STATUS_CSS, stepOrder, STEP_NAMES_ORDERED,
     getCompanyInfo,

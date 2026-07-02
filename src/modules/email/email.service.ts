@@ -2,7 +2,7 @@ import { StepStatus } from '@prisma/client';
 import { prisma } from '../../config/database';
 import { env } from '../../config/env';
 import { logger } from '../../config/logger';
-import { formatDate, formatDateTime, formatCurrency, STEP_LABELS, STEP_STATUS_LABELS } from '../../shared/utils/format';
+import { formatDate, formatDateTime, formatCurrency, daysLate as calcDaysLate, STEP_LABELS, STEP_STATUS_LABELS } from '../../shared/utils/format';
 import { sendMail } from './graph-mailer';
 
 const ACTION_EXPIRY_DAYS = 30;
@@ -122,9 +122,7 @@ export async function sendDelayNotificationEmail(trackingId: string, stepId: str
   }
 
   const stepLabel = STEP_LABELS[delayedStep.stepName as keyof typeof STEP_LABELS] ?? delayedStep.stepName;
-  const daysLate  = delayedStep.dueAt
-    ? Math.floor((Date.now() - new Date(delayedStep.dueAt).getTime()) / 86_400_000)
-    : null;
+  const daysLate  = delayedStep.dueAt ? calcDaysLate(delayedStep.dueAt) : null;
 
   const contractUrl = `${env.APP_URL}/contracts/${trackingId}`;
 

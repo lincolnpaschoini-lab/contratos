@@ -32,9 +32,7 @@ const pipelineSteps = h.STEP_NAMES_ORDERED;
             const isDelayed = c.overallStatus === 'DELAYED';
             const currentStepObj = c.steps.find(function(s) { return s.stepName === stepName; });
             const isOverdue = currentStepObj && currentStepObj.dueAt && new Date(currentStepObj.dueAt) < new Date();
-            const daysLate = isDelayed && currentStepObj && currentStepObj.dueAt
-              ? Math.floor((Date.now() - new Date(currentStepObj.dueAt).getTime()) / 86400000)
-              : null;
+            const daysLate = isDelayed && currentStepObj ? h.daysLate(currentStepObj.dueAt) : null;
             const cCompany = h.getCompanyInfo(c.pipedriveDeal.companyId);
           %>
           <a href="/contracts/<%= c.id %>" class="pipeline-card <%= isDelayed ? 'delayed' : '' %>">

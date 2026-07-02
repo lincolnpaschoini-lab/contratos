@@ -1,4 +1,4 @@
-import { formatDistance, parseISO } from 'date-fns';
+import { formatDistance, parseISO, differenceInCalendarDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ContractStatus, StepName, StepStatus } from '@prisma/client';
 
@@ -33,6 +33,12 @@ export function formatDateTime(date: Date | string | null | undefined): string {
 export function formatRelative(date: Date | string | null | undefined): string {
   if (!date) return '-';
   return formatDistance(toDate(date), new Date(), { addSuffix: true, locale: ptBR });
+}
+
+/** Dias corridos de atraso, contados por dia de calendário (não por blocos de 24h). */
+export function daysLate(dueAt: Date | string | null | undefined): number {
+  if (!dueAt) return 0;
+  return Math.max(0, differenceInCalendarDays(new Date(), toDate(dueAt)));
 }
 
 export function formatCurrency(value: number | string | null | undefined): string {

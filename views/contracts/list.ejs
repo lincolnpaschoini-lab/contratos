@@ -97,9 +97,7 @@
           const isOverdue = currentStepObj?.dueAt && new Date(currentStepObj.dueAt) < new Date() && currentStepObj.status !== 'COMPLETED';
           const completedCount = c.steps.filter(s => s.status === 'COMPLETED').length;
           const progressPct = Math.round((completedCount / 5) * 100);
-          const daysLate = c.overallStatus === 'DELAYED' && currentStepObj?.dueAt
-            ? Math.floor((Date.now() - new Date(currentStepObj.dueAt).getTime()) / 86400000)
-            : null;
+          const daysLate = c.overallStatus === 'DELAYED' ? h.daysLate(currentStepObj?.dueAt) : null;
         %>
         <%
           const cCompanyId = (c.pipedriveDeal?.rawPayload)?.meta?.company_id ?? null;
