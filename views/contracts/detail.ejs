@@ -388,9 +388,13 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
             <span class="text-success"><i class="bi bi-check-circle me-1"></i>Concluído: <%= h.formatDateTime(step.completedAt) %></span>
             <% } %>
             <% if (step.dueAt && step.status !== 'COMPLETED') { %>
+            <%
+              const daysLate = isOverdue ? Math.floor((Date.now() - new Date(step.dueAt).getTime()) / 86400000) : null;
+            %>
             <span class="<%= isOverdue ? 'text-danger fw-semibold' : '' %>">
               <i class="bi bi-calendar-event me-1"></i>Prazo: <%= h.formatDate(step.dueAt) %>
               <% if (isOverdue) { %><span class="badge bg-danger ms-1">ATRASADO</span><% } %>
+              <% if (isOverdue && daysLate > 0) { %><span class="text-danger ms-1"><%= daysLate %> dia<%= daysLate > 1 ? 's' : '' %> em atraso</span><% } %>
             </span>
             <% } %>
             <% if (step.assignedUser) { %>

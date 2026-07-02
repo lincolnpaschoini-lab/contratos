@@ -10,7 +10,7 @@ export function startSlaRecalculationJob() {
     logger.info('Job SLA: iniciando recálculo de atrasos...');
     try {
       const result = await recalculateAllDelays();
-      logger.info(`Job SLA: concluído. Processados: ${result.processed}, atualizados: ${result.updated}`);
+      logger.info(`Job SLA: concluído. Processados: ${result.processed}, atualizados: ${result.updated}, alertas enviados: ${result.notified}`);
     } catch (err: any) {
       logger.error(`Job SLA: erro durante recálculo. ${err.message}`);
     }

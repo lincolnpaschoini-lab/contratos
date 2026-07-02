@@ -32,6 +32,9 @@ const pipelineSteps = h.STEP_NAMES_ORDERED;
             const isDelayed = c.overallStatus === 'DELAYED';
             const currentStepObj = c.steps.find(function(s) { return s.stepName === stepName; });
             const isOverdue = currentStepObj && currentStepObj.dueAt && new Date(currentStepObj.dueAt) < new Date();
+            const daysLate = isDelayed && currentStepObj && currentStepObj.dueAt
+              ? Math.floor((Date.now() - new Date(currentStepObj.dueAt).getTime()) / 86400000)
+              : null;
             const cCompany = h.getCompanyInfo(c.pipedriveDeal.companyId);
           %>
           <a href="/contracts/<%= c.id %>" class="pipeline-card <%= isDelayed ? 'delayed' : '' %>">
@@ -52,6 +55,11 @@ const pipelineSteps = h.STEP_NAMES_ORDERED;
               </span>
               <% } %>
             </div>
+            <% if (isDelayed && daysLate > 0) { %>
+            <div class="pipeline-card-delay-days text-danger" style="font-size:.65rem">
+              <i class="bi bi-clock-history me-1"></i><%= daysLate %> dia<%= daysLate > 1 ? 's' : '' %> em atraso
+            </div>
+            <% } %>
             <% if (c.assignedUser) { %>
             <div class="pipeline-card-user">
               <span class="pipeline-avatar"><%= c.assignedUser.name.charAt(0).toUpperCase() %></span>

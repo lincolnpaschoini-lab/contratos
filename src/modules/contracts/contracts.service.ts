@@ -1,4 +1,5 @@
 import { ContractStatus, StepName, StepStatus } from '@prisma/client';
+import { isSameDay } from 'date-fns';
 import { prisma } from '../../config/database';
 import { AppError } from '../../shared/middlewares/error.middleware';
 import { addBusinessDays, isOverdue } from '../../shared/utils/business-days';
@@ -614,14 +615,23 @@ export async function recalculateOverallStatus(trackingId: string) {
 export async function recalculateAllDelays() {
   const trackings = await findAllTrackingsForRecalculation();
   let updated = 0;
+  let notified = 0;
 
   for (const tracking of trackings) {
     for (const step of tracking.steps) {
-      const notDoneJob = step.status === StepStatus.IN_PROGRESS || step.status === StepStatus.PENDING;
-      if (notDoneJob && isOverdue(step.dueAt)) {
+      const notDone = step.status === StepStatus.IN_PROGRESS || step.status === StepStatus.PENDING || step.status === StepStatus.DELAYED;
+      if (!notDone || !isOverdue(step.dueAt)) continue;
+
+      if (step.status !== StepStatus.DELAYED) {
         await updateStep(step.id, { status: StepStatus.DELAYED });
         updated++;
-        // Notifica por e-mail ao entrar em atraso pela primeira vez (notDoneJob exclui já-DELAYED)
+      }
+
+      // Reenvia o alerta uma vez por dia enquanto a etapa seguir atrasada
+      const alreadyNotifiedToday = step.delayNotifiedAt && isSameDay(step.delayNotifiedAt, new Date());
+      if (!alreadyNotifiedToday) {
+        await updateStep(step.id, { delayNotifiedAt: new Date() });
+        notified++;
         sendDelayNotificationEmail(tracking.id, step.id).catch((err: Error) =>
           logger.error(`[EMAIL] Falha ao notificar atraso (${step.stepName}): ${err.message}`),
         );
@@ -634,11 +644,11 @@ export async function recalculateAllDelays() {
     await recalculateOverallStatus(tracking.id);
   }
 
-  if (updated > 0) {
-    logger.info(`Recálculo de SLA: ${updated} etapa(s) marcada(s) como atrasada(s).`);
+  if (updated > 0 || notified > 0) {
+    logger.info(`Recálculo de SLA: ${updated} etapa(s) marcada(s) como atrasada(s), ${notified} alerta(s) de atraso enviado(s).`);
   }
 
-  return { processed: trackings.length, updated };
+  return { processed: trackings.length, updated, notified };
 }
 
 // ─── Atualização via Clicksign ────────────────────────────────────────────────

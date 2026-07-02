@@ -157,6 +157,7 @@ export async function updateStep(
     completedAt?: Date | null;
     assignedUserId?: string | null;
     notes?: string | null;
+    delayNotifiedAt?: Date | null;
   },
 ) {
   return prisma.contractStep.update({ where: { id: stepId }, data });

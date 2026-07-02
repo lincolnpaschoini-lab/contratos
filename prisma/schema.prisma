@@ -151,6 +151,7 @@ model ContractStep {
   completedAt        DateTime?  @map("completed_at")
   assignedUserId     String?    @map("assigned_user_id")
   notes              String?
+  delayNotifiedAt    DateTime?  @map("delay_notified_at")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
