@@ -245,6 +245,22 @@ export async function postSendRegistrationEmail(req: Request, res: Response, _ne
   res.redirect(`/contracts/${req.params.id}`);
 }
 
+export async function postResendBeneficiariesEmail(req: Request, res: Response, _next: NextFunction) {
+  try {
+    const { requestBeneficiaries } = await import('../beneficiaries/beneficiaries.service');
+    // Força reenvio: invalida tokens existentes antes de criar um novo
+    await prisma.actionToken.updateMany({
+      where: { trackingId: req.params.id, action: 'fill_beneficiaries', usedAt: null },
+      data: { expiresAt: new Date() },
+    });
+    await requestBeneficiaries(req.params.id);
+    setFlash(res, 'success', 'E-mail de definição de beneficiários enviado com sucesso.');
+  } catch (err: any) {
+    setFlash(res, 'error', `Erro ao enviar e-mail: ${err.message}`);
+  }
+  res.redirect(`/contracts/${req.params.id}`);
+}
+
 export async function getContractStepStatus(req: Request, res: Response, _next: NextFunction) {
   const tracking = await prisma.contractTracking.findUnique({
     where: { id: req.params.id },

@@ -4,6 +4,7 @@ import {
   getSlaSettings, postUpdateSla, postUpsertCompanySla, postResetCompanySla, getWebhookEvents,
   postRecalculateAll, getIntegrations, postTestPipedrive, postTestClicksign,
   getPlaceholderSettings, postCreateMapping, postUpdateMapping, postDeleteMapping, postToggleMapping,
+  postUpdateBeneficiaryGlobal, postUpsertBeneficiaryCompany, postResetBeneficiaryCompany,
 } from './settings.controller';
 
 const router = Router();
@@ -25,5 +26,9 @@ router.post('/placeholders', postCreateMapping);
 router.post('/placeholders/:id', postUpdateMapping);
 router.post('/placeholders/:id/toggle', postToggleMapping);
 router.post('/placeholders/:id/delete', postDeleteMapping);
+
+router.post('/beneficiarios', postUpdateBeneficiaryGlobal);
+router.post('/beneficiarios/company', postUpsertBeneficiaryCompany);
+router.post('/beneficiarios/company/reset', postResetBeneficiaryCompany);
 
 export { router as settingsRoutes };

@@ -28,6 +28,11 @@ const TEMPLATE_MAP: Record<string, string> = {
   'PJ-DESCONTINUADO-BENEFICIARIOS': 'ea3c08ff-71bc-4d66-b7a1-e588aadccb8b',
 };
 
+/** Tipos de serviço cujo template Clicksign tem seções de beneficiários PF/PJ. */
+export function isBeneficiaryTipoServico(tipoServico: string | null | undefined): boolean {
+  return !!tipoServico && tipoServico in TEMPLATE_MAP && tipoServico.includes('BENEFICIARIOS');
+}
+
 function getInternalSigners(): Array<{ name: string; email: string }> {
   const emails = env.CLICKSIGN_INTERNAL_SIGNER_EMAILS.split(',').map((e) => e.trim()).filter(Boolean);
   const names = env.CLICKSIGN_INTERNAL_SIGNER_NAMES.split(',').map((n) => n.trim()).filter(Boolean);
@@ -100,11 +105,25 @@ export async function sendContractToClicksign(params: {
   }
 
   // Envia somente campos com valor — evita sobrescrever defaults do template com string vazia
-  const templateData = Object.fromEntries(
+  const templateData: Record<string, string | Array<Record<string, string>>> = Object.fromEntries(
     Object.entries(allTemplateVars).filter(([, v]) => v.trim() !== ''),
   );
 
   console.log(`[CLICKSIGN] Variáveis preenchidas (${Object.keys(templateData).length}/${Object.keys(allTemplateVars).length}): ${Object.entries(templateData).map(([k, v]) => `${k}="${v}"`).join(', ')}`);
+
+  // Contratos com seção de beneficiários no template — mescla as listas PF/PJ cadastradas
+  if (isBeneficiaryTipoServico(tipoServico)) {
+    const beneficiaries = await prisma.contractBeneficiary.findMany({ where: { contractTrackingId: trackingId } });
+    const beneficiariosPF = beneficiaries
+      .filter((b) => b.type === 'PF')
+      .map((b) => ({ nome: b.nome ?? '', cpf: b.cpf ?? '' }));
+    const beneficiariosPJ = beneficiaries
+      .filter((b) => b.type === 'PJ')
+      .map((b) => ({ razaoSocial: b.razaoSocial ?? '', cnpj: b.cnpj ?? '', endereco: b.endereco ?? '' }));
+    templateData.beneficiariosPF = beneficiariosPF;
+    templateData.beneficiariosPJ = beneficiariosPJ;
+    console.log(`[CLICKSIGN] Beneficiários: ${beneficiariosPF.length} PF, ${beneficiariosPJ.length} PJ`);
+  }
 
   // 1 — Criar envelope
   const envelopeName = `${tipoServico} — ${customerName}`;
@@ -186,6 +205,10 @@ export async function sendContractToClicksignManual(trackingId: string): Promise
   if (!customerEmail) return { sent: false, reason: 'Cliente sem email cadastrado' };
 
   const tipoServico = (tracking.pipedriveDeal as any)?.tipoServico ?? null;
+
+  if (isBeneficiaryTipoServico(tipoServico) && !tracking.beneficiariesDefinedAt) {
+    return { sent: false, reason: 'Aguardando definição de beneficiários pelo cliente' };
+  }
 
   return sendContractToClicksign({
     trackingId,

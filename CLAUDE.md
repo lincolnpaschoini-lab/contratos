@@ -64,3 +64,9 @@ JWT in an httpOnly cookie (`signToken`/`verifyToken` in `auth.middleware.ts`), n
 ### Email
 
 Sent via Microsoft Graph API (`email/graph-mailer.ts`), not SMTP — requires `GRAPH_TENANT_ID`/`GRAPH_CLIENT_ID`/`GRAPH_CLIENT_SECRET`. `email/email-action.*` implements one-click actions from email links using single-use, expiring `ActionToken` rows (not auth-gated — token in the URL is the credential), mounted at `/acoes` ahead of the global rate limiter.
+
+
+### Commit e Push
+
+
+AO termino de uma implementação funcional, realizar o commit e o push para o repo: https://github.com/lincolnpaschoini-lab/contratos

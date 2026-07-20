@@ -46,3 +46,31 @@ export async function updateSlaRule(
     },
   });
 }
+
+// ─── Notificação de definição de beneficiários ───────────────────────────────
+
+export async function getBeneficiaryNotifyRules() {
+  return prisma.beneficiaryNotifyRule.findMany({ orderBy: [{ companyId: 'asc' }] });
+}
+
+export async function upsertGlobalBeneficiaryNotify(notifyEmails: string | null, active: boolean) {
+  const existing = await prisma.beneficiaryNotifyRule.findFirst({ where: { companyId: null } });
+  if (existing) {
+    return prisma.beneficiaryNotifyRule.update({ where: { id: existing.id }, data: { notifyEmails, active } });
+  }
+  return prisma.beneficiaryNotifyRule.create({ data: { companyId: null, notifyEmails, active } });
+}
+
+export async function upsertCompanyBeneficiaryNotify(companyId: string, notifyEmails: string | null, active: boolean) {
+  const existing = await prisma.beneficiaryNotifyRule.findFirst({ where: { companyId } });
+  if (existing) {
+    return prisma.beneficiaryNotifyRule.update({ where: { id: existing.id }, data: { notifyEmails, active } });
+  }
+  return prisma.beneficiaryNotifyRule.create({ data: { companyId, notifyEmails, active } });
+}
+
+export async function deleteCompanyBeneficiaryNotify(companyId: string) {
+  const existing = await prisma.beneficiaryNotifyRule.findFirst({ where: { companyId } });
+  if (!existing) return;
+  await prisma.beneficiaryNotifyRule.delete({ where: { id: existing.id } });
+}

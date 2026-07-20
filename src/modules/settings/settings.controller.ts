@@ -1,7 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { setFlash } from '../../shared/middlewares/flash.middleware';
-import { getAllSlaRules, updateSlaRule, upsertCompanySlaRule, deleteCompanySlaRule } from './settings.service';
+import {
+  getAllSlaRules, updateSlaRule, upsertCompanySlaRule, deleteCompanySlaRule,
+  getBeneficiaryNotifyRules, upsertGlobalBeneficiaryNotify, upsertCompanyBeneficiaryNotify, deleteCompanyBeneficiaryNotify,
+} from './settings.service';
 import {
   getAllMappings, createMapping, updateMapping, deleteMapping, toggleMappingActive,
   SOURCE_FIELDS, CONTRACT_TYPE_LABELS, resolveSourceField,
@@ -47,9 +50,79 @@ export async function getSlaSettings(req: Request, res: Response, next: NextFunc
     const delayNotifyEmailsEnv = (env.DELAY_NOTIFY_EMAILS ?? '')
       .split(',').map((e) => e.trim()).filter(Boolean).join('\n');
 
-    res.render('settings/sla', { title: 'Configurações de SLA', ruleMap, companies, STEP_ORDER_LIST, delayNotifyEmailsEnv });
+    // Regras de notificação de definição de beneficiários — mesma forma global + override por empresa
+    const beneficiaryRules = await getBeneficiaryNotifyRules();
+    const beneficiaryRuleMap: { global: any; byCompany: Record<string, any> } = { global: null, byCompany: {} };
+    for (const rule of beneficiaryRules) {
+      if (rule.companyId === null) {
+        beneficiaryRuleMap.global = rule;
+      } else {
+        beneficiaryRuleMap.byCompany[rule.companyId] = rule;
+      }
+    }
+
+    res.render('settings/sla', { title: 'Configurações de SLA', ruleMap, companies, STEP_ORDER_LIST, delayNotifyEmailsEnv, beneficiaryRuleMap });
   } catch (err) {
     next(err);
+  }
+}
+
+// ─── Config. Notificação de Beneficiários ────────────────────────────────────
+
+export async function postUpdateBeneficiaryGlobal(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { active, notifyEmails } = z
+      .object({
+        active: z.string().optional().transform((v) => v !== 'false'),
+        notifyEmails: z.string().optional().transform((v) => {
+          if (!v) return null;
+          const emails = v.split(/[\n,]/).map((e) => e.trim()).filter(Boolean);
+          return emails.length > 0 ? emails.join(',') : null;
+        }),
+      })
+      .parse(req.body);
+
+    await upsertGlobalBeneficiaryNotify(notifyEmails, active);
+    setFlash(res, 'success', 'Notificação de beneficiários (global) salva com sucesso.');
+    res.redirect('/settings/sla');
+  } catch (err: any) {
+    setFlash(res, 'error', err.message ?? 'Erro ao salvar notificação de beneficiários.');
+    res.redirect('/settings/sla');
+  }
+}
+
+export async function postUpsertBeneficiaryCompany(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { companyId, active, notifyEmails } = z
+      .object({
+        companyId: z.string().min(1, 'Empresa obrigatória.'),
+        active: z.string().optional().transform((v) => v !== 'false'),
+        notifyEmails: z.string().optional().transform((v) => {
+          if (!v) return null;
+          const emails = v.split(/[\n,]/).map((e) => e.trim()).filter(Boolean);
+          return emails.length > 0 ? emails.join(',') : null;
+        }),
+      })
+      .parse(req.body);
+
+    await upsertCompanyBeneficiaryNotify(companyId, notifyEmails, active);
+    setFlash(res, 'success', 'Override de notificação de beneficiários salvo com sucesso.');
+    res.redirect('/settings/sla');
+  } catch (err: any) {
+    setFlash(res, 'error', err.message ?? 'Erro ao salvar override de notificação de beneficiários.');
+    res.redirect('/settings/sla');
+  }
+}
+
+export async function postResetBeneficiaryCompany(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { companyId } = z.object({ companyId: z.string().min(1) }).parse(req.body);
+    await deleteCompanyBeneficiaryNotify(companyId);
+    setFlash(res, 'success', 'Override removido. A empresa voltará a usar a regra Global.');
+    res.redirect('/settings/sla');
+  } catch (err: any) {
+    setFlash(res, 'error', err.message ?? 'Erro ao resetar configuração.');
+    res.redirect('/settings/sla');
   }
 }
 

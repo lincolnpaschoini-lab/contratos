@@ -70,6 +70,49 @@ export async function sendRegistrationActionEmail(trackingId: string): Promise<v
   logger.info(`[EMAIL] Notificação enviada para ${env.REGISTRATION_NOTIFY_EMAIL} — tracking ${trackingId}`);
 }
 
+// ─── Solicitação de definição de beneficiários ───────────────────────────────
+
+/** Dispara e-mail pedindo a definição dos beneficiários PF/PJ (ou "não há") antes de enviar o contrato ao Clicksign. */
+export async function sendBeneficiariesRequestEmail(trackingId: string, recipients: string[]): Promise<void> {
+  if (!env.GRAPH_TENANT_ID || !env.GRAPH_CLIENT_ID || !env.GRAPH_CLIENT_SECRET) {
+    throw new Error('Credenciais Microsoft Graph não configuradas (GRAPH_TENANT_ID, GRAPH_CLIENT_ID ou GRAPH_CLIENT_SECRET ausentes)');
+  }
+
+  const tracking = await prisma.contractTracking.findUnique({
+    where: { id: trackingId },
+    include: { customer: true, pipedriveDeal: true },
+  });
+
+  if (!tracking) throw new Error(`Contrato ${trackingId} não encontrado`);
+
+  const existing = await prisma.actionToken.findFirst({
+    where: { trackingId, action: 'fill_beneficiaries', usedAt: null, expiresAt: { gt: new Date() } },
+  });
+
+  let token: string;
+  if (existing) {
+    token = existing.token;
+  } else {
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + ACTION_EXPIRY_DAYS);
+    const created = await prisma.actionToken.create({
+      data: { trackingId, action: 'fill_beneficiaries', expiresAt, metadata: { customerName: tracking.customer.name } },
+      select: { token: true },
+    });
+    token = created.token;
+  }
+
+  const actionUrl = `${env.APP_URL}/acoes/beneficiarios/${token}`;
+
+  await sendMail({
+    to: recipients,
+    subject: `Definição de beneficiários pendente — ${tracking.customer.name}`,
+    html: buildBeneficiariesRequestEmailHtml(tracking, actionUrl),
+  });
+
+  logger.info(`[EMAIL] Solicitação de beneficiários enviada para ${recipients.join(', ')} — tracking ${trackingId}`);
+}
+
 // ─── Notificação de atraso ────────────────────────────────────────────────────
 
 /** Dispara alerta de atraso. Usa os e-mails configurados na regra de SLA da etapa; cai no DELAY_NOTIFY_EMAILS como fallback. */
@@ -591,6 +634,101 @@ function buildNewLeadEmailHtml(tracking: any, stepLabel: string, contractUrl: st
     <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 36px;">
       <p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">
         Paschoini Advogados &middot; Sistema interno de contratos &middot; Notificação automática
+      </p>
+    </td>
+  </tr>
+
+</table>
+</td></tr>
+</table>
+</body>
+</html>`;
+}
+
+function buildBeneficiariesRequestEmailHtml(tracking: any, actionUrl: string): string {
+  const c = tracking.customer;
+  const d = tracking.pipedriveDeal;
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Definição de beneficiários pendente</title>
+</head>
+<body style="margin:0;padding:0;background:#f4f6fb;font-family:Arial,Helvetica,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6fb;padding:32px 16px;">
+<tr><td align="center">
+<table width="620" cellpadding="0" cellspacing="0" style="background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,.10);">
+
+  <!-- Header -->
+  <tr>
+    <td style="background:#1a1f2e;padding:26px 36px;">
+      <p style="margin:0;color:#fff;font-size:20px;font-weight:700;">Paschoini Advogados</p>
+      <p style="margin:4px 0 0;color:#94a3b8;font-size:13px;">Sistema interno de contratos</p>
+    </td>
+  </tr>
+
+  <!-- Alerta -->
+  <tr>
+    <td style="background:#fef9c3;border-bottom:2px solid #fde047;padding:16px 36px;">
+      <p style="margin:0;color:#854d0e;font-size:14px;font-weight:600;">
+        ⚠ Definição de beneficiários pendente — ação necessária
+      </p>
+    </td>
+  </tr>
+
+  <!-- Corpo -->
+  <tr><td style="padding:32px 36px;">
+
+    <p style="margin:0 0 4px;color:#64748b;font-size:13px;">
+      O contrato abaixo está na etapa de <strong>Assinatura</strong> e exige a definição dos beneficiários (pessoas físicas e/ou jurídicas) antes que o envelope seja gerado no Clicksign.
+    </p>
+
+    ${sectionTitle('Dados da Empresa')}
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Razão Social', c.name)}
+      ${row('CNPJ / CPF', c.document)}
+      ${row('E-mail', c.email)}
+      ${row('Telefone', c.phone)}
+    </table>
+
+    ${sectionTitle('Dados do Contrato')}
+    <table width="100%" cellpadding="0" cellspacing="0">
+      ${row('Deal Pipedrive', d?.title ?? null)}
+      ${row('ID do Deal', d?.externalDealId ? `#${d.externalDealId}` : null)}
+      ${row('Tipo de Serviço', d?.tipoServico ?? null)}
+      ${row('Valor', d?.value ? formatCurrency(d.value) : null)}
+    </table>
+
+    <!-- CTA -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:32px 0 8px;">
+      <tr>
+        <td align="center">
+          <table cellpadding="0" cellspacing="0">
+            <tr>
+              <td style="background:#0d6efd;border-radius:7px;">
+                <a href="${actionUrl}"
+                   style="display:inline-block;padding:16px 40px;color:#fff;font-size:16px;font-weight:700;text-decoration:none;">
+                  ✓&nbsp; Definir beneficiários
+                </a>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:20px 0 0;color:#94a3b8;font-size:12px;">
+            Link válido por ${ACTION_EXPIRY_DAYS} dias. Se não esperava este e-mail, ignore-o.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+  </td></tr>
+
+  <!-- Footer -->
+  <tr>
+    <td style="background:#f8fafc;border-top:1px solid #e2e8f0;padding:16px 36px;">
+      <p style="margin:0;color:#94a3b8;font-size:12px;text-align:center;">
+        Paschoini Advogados &middot; Sistema interno de contratos
       </p>
     </td>
   </tr>

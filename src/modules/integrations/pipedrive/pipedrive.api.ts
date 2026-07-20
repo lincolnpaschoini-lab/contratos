@@ -166,6 +166,29 @@ export async function fetchDeal(dealId: number | string, ctx?: PipedriveApiConte
   return data;
 }
 
+export interface PipedriveSearchResult {
+  id: number;
+  name: string;
+}
+
+interface PipedriveSearchResponse {
+  items: Array<{ item: { id: number; name: string } }>;
+}
+
+/** Busca leve (só id + nome) de pessoas pelo termo — usada no autocomplete de beneficiários. */
+export async function searchPersons(term: string, ctx?: PipedriveApiContext): Promise<PipedriveSearchResult[]> {
+  if (!term.trim()) return [];
+  const data = await apiGet<PipedriveSearchResponse>(`/persons/search?term=${encodeURIComponent(term)}&fields=name`, ctx);
+  return (data?.items ?? []).map((i) => ({ id: i.item.id, name: i.item.name }));
+}
+
+/** Busca leve (só id + nome) de organizações pelo termo — usada no autocomplete de beneficiários. */
+export async function searchOrganizations(term: string, ctx?: PipedriveApiContext): Promise<PipedriveSearchResult[]> {
+  if (!term.trim()) return [];
+  const data = await apiGet<PipedriveSearchResponse>(`/organizations/search?term=${encodeURIComponent(term)}&fields=name`, ctx);
+  return (data?.items ?? []).map((i) => ({ id: i.item.id, name: i.item.name }));
+}
+
 /**
  * Resolve o valor de um campo enum do Pipedrive para seu label legível.
  *

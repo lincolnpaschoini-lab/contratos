@@ -83,7 +83,7 @@ export async function addDocumentFromTemplate(
   envelopeId: string,
   templateKey: string,
   filename: string,
-  templateData: Record<string, string> = {},
+  templateData: Record<string, string | Array<Record<string, string>>> = {},
 ): Promise<string> {
   const res = await apiCall<{ data: { id: string } }>('POST', `/envelopes/${envelopeId}/documents`, {
     data: {

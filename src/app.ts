@@ -32,6 +32,7 @@ import { pipedriveRoutes } from './modules/integrations/pipedrive/pipedrive.rout
 import { clicksignRoutes } from './modules/integrations/clicksign/clicksign.routes';
 import { webhookEventRoutes } from './modules/webhooks/webhooks.routes';
 import { emailActionRoutes } from './modules/email/email-action.routes';
+import { beneficiariesRoutes } from './modules/beneficiaries/beneficiaries.routes';
 import { notificationRoutes } from './modules/notifications/notifications.routes';
 import { getUnreadCount } from './modules/notifications/notifications.service';
 import { getCompanyInfo } from './modules/integrations/pipedrive/pipedrive.service';
@@ -114,6 +115,7 @@ app.get('/events', requireAuth, (req, res) => {
 
 // Rota pública de ações por e-mail (sem autenticação, antes do rate limit padrão)
 app.use('/acoes', emailActionRoutes);
+app.use('/acoes', beneficiariesRoutes);
 app.use('/notifications', notificationRoutes);
 
 app.use(defaultRateLimit);

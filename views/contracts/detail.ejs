@@ -62,6 +62,7 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
     ? contract.pipedriveDeal.rawPayload._extracted : null;
   const tipoServico = (contract.pipedriveDeal && contract.pipedriveDeal.tipoServico) ? contract.pipedriveDeal.tipoServico : '';
   const isPF = tipoServico.includes('PF');
+  const isBeneficiaryContract = tipoServico.includes('BENEFICIARIOS');
 %>
 <div class="row g-3 mb-4 mt-2">
 
@@ -493,8 +494,27 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
   </div>
 </div>
 
+<!-- Aguardando definição de beneficiários (bloqueia o envio ao Clicksign) -->
+<% if (contract.currentStep === 'CONTRACT_SIGNING' && isBeneficiaryContract && !contract.beneficiariesDefinedAt) { %>
+<div class="alert alert-info d-flex align-items-center gap-3 mb-4">
+  <i class="bi bi-people-fill fs-4"></i>
+  <div class="flex-grow-1">
+    <div class="fw-semibold">Aguardando definição de beneficiários pelo cliente</div>
+    <div class="small text-muted">
+      O envelope Clicksign só será criado após o preenchimento dos beneficiários PF/PJ (ou confirmação de que não há).
+      <% if (contract.beneficiariesRequestedAt) { %>E-mail enviado em <%= h.formatDateTime(contract.beneficiariesRequestedAt) %>.<% } %>
+    </div>
+  </div>
+  <form method="POST" action="/contracts/<%= contract.id %>/resend-beneficiaries-email">
+    <button type="submit" class="btn btn-outline-primary">
+      <i class="bi bi-envelope me-1"></i>Reenviar e-mail
+    </button>
+  </form>
+</div>
+<% } %>
+
 <!-- Envio manual para Clicksign (quando está em Assinatura mas sem envelope) -->
-<% if (contract.currentStep === 'CONTRACT_SIGNING' && (!contract.clicksignDocs || contract.clicksignDocs.length === 0)) { %>
+<% if (contract.currentStep === 'CONTRACT_SIGNING' && (!contract.clicksignDocs || contract.clicksignDocs.length === 0) && !(isBeneficiaryContract && !contract.beneficiariesDefinedAt)) { %>
 <div class="alert alert-warning d-flex align-items-center gap-3 mb-4">
   <i class="bi bi-exclamation-triangle fs-4"></i>
   <div class="flex-grow-1">

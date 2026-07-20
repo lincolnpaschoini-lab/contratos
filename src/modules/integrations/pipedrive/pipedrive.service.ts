@@ -52,7 +52,7 @@ function checkbox(value: string | null | undefined, match: string): string {
  * personFields é usado para resolver valores de campos enum (ex: Estado Civil, Nacionalidade)
  * que podem chegar como IDs numéricos em vez de labels.
  */
-function extractPersonFields(
+export function extractPersonFields(
   person: Record<string, unknown> | null,
   personFields: PipedriveField[] = [],
 ): Record<string, string | null> | null {
@@ -91,7 +91,7 @@ function extractPersonFields(
 /**
  * Extrai campos customizados mapeados da Organização (PJ) do Pipedrive.
  */
-function extractOrgFields(org: Record<string, unknown> | null): Record<string, string | null> | null {
+export function extractOrgFields(org: Record<string, unknown> | null): Record<string, string | null> | null {
   if (!org) return null;
   return {
     razaoSocial:  String(org.name ?? '').trim() || null,
@@ -201,6 +201,18 @@ function resolveCompanyConfig(companyId: string): CompanyConfig {
     preparationStageId: env.PIPEDRIVE_CONTRACT_PREPARATION_STAGE_ID,
     signingStageId: env.PIPEDRIVE_CONTRACT_SIGNING_STAGE_ID,
   };
+}
+
+/** Resolve só o contexto de API (token+domínio) da empresa do deal — usado fora do fluxo de webhook (ex: busca no formulário público de beneficiários). */
+export function getPipedriveApiContextForCompany(companyId: string | null | undefined): PipedriveApiContext {
+  const fallback: PipedriveApiContext = {
+    apiToken: env.PIPEDRIVE_API_TOKEN ?? '',
+    domain: env.PIPEDRIVE_DOMAIN ?? '',
+    companyName: 'Paschoini',
+  };
+  if (!companyId) return fallback;
+  const config = resolveCompanyConfig(companyId);
+  return config ?? fallback;
 }
 
 // Suporta formato v1 (event + current) e v2 (meta.action + data)
@@ -545,14 +557,27 @@ async function handleMoveToSigning(dealId: string, dealData: DealData, pipedrive
     });
   }
 
-  // Envia contrato para assinatura no Clicksign
+  // Envia contrato para assinatura no Clicksign — ou, se o tipo de serviço tiver beneficiários,
+  // pede a definição deles antes (só então o envelope é criado).
   const customer = (existingDeal.contractTracking as any).customer;
   const customerEmail = customer?.contactEmail ?? customer?.email ?? null;
   const customerName = customer?.name ?? 'Cliente';
 
   console.log(`[PIPEDRIVE] Deal ${dealId}: preparando envio Clicksign — tipoServico: "${tipoServico}", email: "${customerEmail}"`);
 
-  if (customerEmail) {
+  const { isBeneficiaryTipoServico } = await import('../clicksign/clicksign.service');
+
+  if (isBeneficiaryTipoServico(tipoServico)) {
+    const { requestBeneficiaries } = await import('../../beneficiaries/beneficiaries.service');
+    requestBeneficiaries(tracking.id)
+      .then(() => {
+        console.log(`[PIPEDRIVE] Deal ${dealId}: e-mail de definição de beneficiários disparado`);
+      })
+      .catch((err) => {
+        console.error(`[PIPEDRIVE] Beneficiários ERRO: ${err.message}`);
+        logger.error(`Beneficiários: falha ao solicitar definição para o deal ${dealId} — ${err.message}`);
+      });
+  } else if (customerEmail) {
     const { sendContractToClicksign } = await import('../clicksign/clicksign.service');
     sendContractToClicksign({ trackingId: tracking.id, tipoServico, customerName, customerEmail })
       .then((r) => {
