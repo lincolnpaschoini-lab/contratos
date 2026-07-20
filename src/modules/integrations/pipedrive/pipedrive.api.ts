@@ -23,8 +23,9 @@ async function apiGet<T>(path: string, ctx?: PipedriveApiContext): Promise<T | n
     return null;
   }
 
-  const url     = `https://${domain}/api/v1${path}?api_token=${token}`;
-  const urlSafe = `https://${domain}/api/v1${path}?api_token=***`;
+  const separator = path.includes('?') ? '&' : '?';
+  const url     = `https://${domain}/api/v1${path}${separator}api_token=${token}`;
+  const urlSafe = `https://${domain}/api/v1${path}${separator}api_token=***`;
 
   console.log(`[PIPEDRIVE API] GET ${urlSafe} (${ctx?.companyName ?? 'default'})`);
 

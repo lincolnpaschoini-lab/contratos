@@ -71,6 +71,28 @@
     }
     .submit-btn:hover { background: #0b5ed7; }
     .footer { margin-top: 20px; text-align: center; color: #94a3b8; font-size: 12px; }
+    .row-block.row-error { border-color: #dc2626; background: #fef2f2; }
+    .error-banner {
+      display: none; background: #fee2e2; border: 1px solid #fca5a5; color: #991b1b;
+      border-radius: 6px; padding: 12px 16px; font-size: 13px; margin-bottom: 16px;
+    }
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; background: rgba(15,23,42,.5);
+      align-items: center; justify-content: center; z-index: 100; padding: 20px;
+    }
+    .modal-box {
+      background: #fff; border-radius: 12px; max-width: 480px; width: 100%;
+      padding: 28px 32px; box-shadow: 0 8px 32px rgba(0,0,0,.2);
+    }
+    .modal-box h3 { margin: 0 0 14px; font-size: 17px; }
+    .modal-box ul { margin: 6px 0 14px; padding-left: 20px; font-size: 13px; }
+    .modal-box p { font-size: 14px; margin: 0 0 8px; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; }
+    .modal-actions button {
+      padding: 10px 20px; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; border: none;
+    }
+    .modal-cancel { background: #f1f5f9; color: #334155; }
+    .modal-confirm { background: #0d6efd; color: #fff; }
   </style>
 </head>
 <body>
@@ -85,6 +107,8 @@
     <p class="hint">Tipo de serviço: <strong><%= tipoServico %></strong> — informe abaixo os beneficiários (pessoas físicas e/ou jurídicas) deste contrato, ou indique que não há beneficiários.</p>
 
     <form method="POST" action="/acoes/beneficiarios/<%= token %>" id="beneficiaryForm">
+
+      <div class="error-banner" id="errorBanner"></div>
 
       <fieldset>
         <div class="radio-row">
@@ -109,6 +133,18 @@
     </form>
   </div>
   <div class="footer">Paschoini Advogados &middot; Sistema interno de contratos</div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal-box">
+    <h3>Confirmar envio</h3>
+    <div id="modalBody"></div>
+    <p style="color:#64748b;font-size:12px;">Confira os dados antes de confirmar — essa ação não pode ser desfeita.</p>
+    <div class="modal-actions">
+      <button type="button" class="modal-cancel" id="modalCancel">Voltar e revisar</button>
+      <button type="button" class="modal-confirm" id="modalConfirm">Confirmar e enviar</button>
+    </div>
+  </div>
 </div>
 
 <template id="pfRowTemplate">
@@ -259,6 +295,110 @@
   document.getElementById('radioNone').addEventListener('change', function () { section.style.display = 'none'; });
 
   addPfRow();
+
+  // ── Validação, bloqueio de Enter e confirmação antes do envio ────────────
+
+  var form = document.getElementById('beneficiaryForm');
+  var errorBanner = document.getElementById('errorBanner');
+  var modalOverlay = document.getElementById('modalOverlay');
+  var modalBody = document.getElementById('modalBody');
+
+  // Enter em qualquer campo de texto não deve submeter o formulário
+  // (evita envio acidental ao usar a busca do Pipedrive, por exemplo).
+  form.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Enter' && ev.target.tagName === 'INPUT') {
+      ev.preventDefault();
+    }
+  });
+
+  function escapeHtml(str) {
+    var d = document.createElement('div');
+    d.textContent = str;
+    return d.innerHTML;
+  }
+
+  function validateAndCollect() {
+    var errors = [];
+    var isNone = document.getElementById('radioNone').checked;
+    var summary = { none: isNone, pf: [], pj: [] };
+
+    document.querySelectorAll('.row-block').forEach(function (b) { b.classList.remove('row-error'); });
+
+    if (!isNone) {
+      pfRows.querySelectorAll('.row-block').forEach(function (block) {
+        var nome = block.querySelector('.pf-nome').value.trim();
+        var cpf = block.querySelector('.pf-cpf').value.trim();
+        var cpfDigits = cpf.replace(/\D/g, '');
+        if (!nome && !cpf) return; // linha em branco — ignora
+        if (!nome || cpfDigits.length !== 11) {
+          block.classList.add('row-error');
+          errors.push('Beneficiário PF: informe nome completo e um CPF válido (11 dígitos).');
+          return;
+        }
+        summary.pf.push({ nome: nome, cpf: cpf });
+      });
+
+      pjRows.querySelectorAll('.row-block').forEach(function (block) {
+        var razao = block.querySelector('.pj-razao').value.trim();
+        var cnpj = block.querySelector('.pj-cnpj').value.trim();
+        var cnpjDigits = cnpj.replace(/\D/g, '');
+        if (!razao && !cnpj) return; // linha em branco — ignora
+        if (!razao || cnpjDigits.length !== 14) {
+          block.classList.add('row-error');
+          errors.push('Beneficiário PJ: informe razão social e um CNPJ válido (14 dígitos).');
+          return;
+        }
+        summary.pj.push({ razaoSocial: razao, cnpj: cnpj });
+      });
+
+      if (summary.pf.length === 0 && summary.pj.length === 0) {
+        errors.push('Cadastre ao menos um beneficiário ou marque "Não há beneficiários".');
+      }
+    }
+
+    return { errors: errors, summary: summary };
+  }
+
+  function showConfirmModal(summary) {
+    var html = '';
+    if (summary.none) {
+      html = '<p>Confirma que <strong>não há beneficiários</strong> neste contrato?</p>';
+    } else {
+      if (summary.pf.length > 0) {
+        html += '<p><strong>Pessoa Física</strong></p><ul>' + summary.pf.map(function (p) {
+          return '<li>' + escapeHtml(p.nome) + ' — CPF ' + escapeHtml(p.cpf) + '</li>';
+        }).join('') + '</ul>';
+      }
+      if (summary.pj.length > 0) {
+        html += '<p><strong>Pessoa Jurídica</strong></p><ul>' + summary.pj.map(function (p) {
+          return '<li>' + escapeHtml(p.razaoSocial) + ' — CNPJ ' + escapeHtml(p.cnpj) + '</li>';
+        }).join('') + '</ul>';
+      }
+    }
+    modalBody.innerHTML = html;
+    modalOverlay.style.display = 'flex';
+  }
+
+  form.addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    var result = validateAndCollect();
+    if (result.errors.length > 0) {
+      errorBanner.innerHTML = result.errors.map(function (m) { return '<div>• ' + escapeHtml(m) + '</div>'; }).join('');
+      errorBanner.style.display = 'block';
+      errorBanner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+    errorBanner.style.display = 'none';
+    showConfirmModal(result.summary);
+  });
+
+  document.getElementById('modalCancel').addEventListener('click', function () {
+    modalOverlay.style.display = 'none';
+  });
+  document.getElementById('modalConfirm').addEventListener('click', function () {
+    modalOverlay.style.display = 'none';
+    form.submit(); // chamada direta ao método nativo — não reemite o evento 'submit', evita loop
+  });
 })();
 </script>
 </body>
