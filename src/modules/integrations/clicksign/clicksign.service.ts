@@ -119,7 +119,7 @@ export async function sendContractToClicksign(params: {
       .map((b) => ({ nome: b.nome ?? '', cpf: b.cpf ?? '' }));
     const beneficiariosPJ = beneficiaries
       .filter((b) => b.type === 'PJ')
-      .map((b) => ({ razaoSocial: b.razaoSocial ?? '', cnpj: b.cnpj ?? '', endereco: b.endereco ?? '' }));
+      .map((b) => ({ razaoSocial: b.razaoSocial ?? '', cnpj: b.cnpj ?? '', 'endereço': b.endereco ?? '' }));
     templateData.beneficiariosPF = beneficiariosPF;
     templateData.beneficiariosPJ = beneficiariosPJ;
     console.log(`[CLICKSIGN] Beneficiários: ${beneficiariosPF.length} PF, ${beneficiariosPJ.length} PJ`);
