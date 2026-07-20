@@ -34,8 +34,11 @@ const pipelineSteps = h.STEP_NAMES_ORDERED;
             const isOverdue = currentStepObj && currentStepObj.dueAt && new Date(currentStepObj.dueAt) < new Date();
             const daysLate = isDelayed && currentStepObj ? h.daysLate(currentStepObj.dueAt) : null;
             const cCompany = h.getCompanyInfo(c.pipedriveDeal.companyId);
+            const isPendingBeneficiaries = stepName === 'CONTRACT_SIGNING'
+              && c.pipedriveDeal.tipoServico && c.pipedriveDeal.tipoServico.includes('BENEFICIARIOS')
+              && !c.beneficiariesDefinedAt;
           %>
-          <a href="/contracts/<%= c.id %>" class="pipeline-card <%= isDelayed ? 'delayed' : '' %>">
+          <a href="/contracts/<%= c.id %>" class="pipeline-card <%= isDelayed ? 'delayed' : '' %> <%= isPendingBeneficiaries ? 'pending-beneficiaries' : '' %>">
             <div class="d-flex align-items-start justify-content-between gap-1 mb-1">
               <div class="pipeline-card-name"><%= c.customer.name %></div>
               <span class="badge bg-<%= cCompany.css %><%= cCompany.css === 'warning' ? ' text-dark' : '' %>" style="font-size:.6rem;white-space:nowrap"><%= cCompany.name %></span>
@@ -56,6 +59,11 @@ const pipelineSteps = h.STEP_NAMES_ORDERED;
             <% if (isDelayed && daysLate > 0) { %>
             <div class="pipeline-card-delay-days text-danger" style="font-size:.65rem">
               <i class="bi bi-clock-history me-1"></i><%= daysLate %> dia<%= daysLate > 1 ? 's' : '' %> em atraso
+            </div>
+            <% } %>
+            <% if (isPendingBeneficiaries) { %>
+            <div class="pipeline-card-delay-days" style="font-size:.65rem;color:#a16207">
+              <i class="bi bi-people-fill me-1"></i>Pendente: beneficiários
             </div>
             <% } %>
             <% if (c.assignedUser) { %>

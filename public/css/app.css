@@ -479,6 +479,12 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; }
   background: #fffafa;
 }
 
+.pipeline-card.pending-beneficiaries {
+  border: 2px solid #f0ad4e;
+  background: #fffbea;
+  box-shadow: 0 0 0 1px #f0ad4e inset;
+}
+
 .pipeline-card-name {
   font-weight: 600;
   font-size: .83rem;

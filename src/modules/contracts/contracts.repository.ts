@@ -26,6 +26,7 @@ const trackingInclude = {
     },
   },
   clicksignDocs: { orderBy: { createdAt: 'desc' as const }, take: 1 },
+  beneficiaries: { orderBy: { createdAt: 'asc' as const } },
 };
 
 export async function findAllTrackings(

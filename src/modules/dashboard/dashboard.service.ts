@@ -59,7 +59,7 @@ export async function getDashboardSummary() {
       orderBy: [{ overallStatus: 'asc' }, { proposalAcceptedAt: 'asc' }],
       include: {
         customer: { select: { id: true, name: true } },
-        pipedriveDeal: { select: { title: true, value: true, companyId: true } },
+        pipedriveDeal: { select: { title: true, value: true, companyId: true, tipoServico: true } },
         assignedUser: { select: { id: true, name: true } },
         steps: {
           orderBy: { stepOrder: 'asc' },

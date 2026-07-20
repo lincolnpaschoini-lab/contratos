@@ -266,6 +266,39 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
     </div>
   </div>
 
+  <!-- Beneficiários (PF/PJ) — só para tipos de serviço com beneficiários -->
+  <% if (isBeneficiaryContract) { %>
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-people-fill me-2"></i>Beneficiários</div>
+      <div class="card-body">
+        <% if (!contract.beneficiariesDefinedAt) { %>
+        <div class="text-muted small"><i class="bi bi-hourglass-split me-1"></i>Ainda não definidos.</div>
+        <% } else if (!contract.beneficiaries || contract.beneficiaries.length === 0) { %>
+        <div class="text-muted small"><i class="bi bi-check-circle me-1"></i>Confirmado: não há beneficiários neste contrato.</div>
+        <% } else { %>
+        <div class="row g-3">
+          <% contract.beneficiaries.forEach(function(b) { %>
+          <div class="col-12 col-md-6">
+            <div class="border rounded p-2 small">
+              <% if (b.type === 'PF') { %>
+              <div class="fw-semibold"><i class="bi bi-person me-1"></i><%= b.nome %></div>
+              <div class="text-muted">CPF: <%= b.cpf || '—' %></div>
+              <% } else { %>
+              <div class="fw-semibold"><i class="bi bi-building me-1"></i><%= b.razaoSocial %></div>
+              <div class="text-muted">CNPJ: <%= b.cnpj || '—' %></div>
+              <% if (b.endereco) { %><div class="text-muted">Endereço: <%= b.endereco %></div><% } %>
+              <% } %>
+            </div>
+          </div>
+          <% }); %>
+        </div>
+        <% } %>
+      </div>
+    </div>
+  </div>
+  <% } %>
+
   <!-- Condições Contratuais (campos customizados do Deal) — sempre exibido -->
   <div class="col-12">
     <div class="card">
