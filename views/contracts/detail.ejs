@@ -277,21 +277,36 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
         <% } else if (!contract.beneficiaries || contract.beneficiaries.length === 0) { %>
         <div class="text-muted small"><i class="bi bi-check-circle me-1"></i>Confirmado: não há beneficiários neste contrato.</div>
         <% } else { %>
+        <%
+          const pfBeneficiaries = contract.beneficiaries.filter(function(b) { return b.type === 'PF'; });
+          const pjBeneficiaries = contract.beneficiaries.filter(function(b) { return b.type === 'PJ'; });
+        %>
         <div class="row g-3">
-          <% contract.beneficiaries.forEach(function(b) { %>
           <div class="col-12 col-md-6">
-            <div class="border rounded p-2 small">
-              <% if (b.type === 'PF') { %>
+            <div class="small text-muted fw-semibold mb-2">Pessoa Física</div>
+            <% if (pfBeneficiaries.length === 0) { %>
+            <div class="text-muted small">Nenhum</div>
+            <% } %>
+            <% pfBeneficiaries.forEach(function(b) { %>
+            <div class="border rounded p-2 small mb-2">
               <div class="fw-semibold"><i class="bi bi-person me-1"></i><%= b.nome %></div>
               <div class="text-muted">CPF: <%= b.cpf || '—' %></div>
-              <% } else { %>
+            </div>
+            <% }); %>
+          </div>
+          <div class="col-12 col-md-6">
+            <div class="small text-muted fw-semibold mb-2">Pessoa Jurídica</div>
+            <% if (pjBeneficiaries.length === 0) { %>
+            <div class="text-muted small">Nenhum</div>
+            <% } %>
+            <% pjBeneficiaries.forEach(function(b) { %>
+            <div class="border rounded p-2 small mb-2">
               <div class="fw-semibold"><i class="bi bi-building me-1"></i><%= b.razaoSocial %></div>
               <div class="text-muted">CNPJ: <%= b.cnpj || '—' %></div>
               <% if (b.endereco) { %><div class="text-muted">Endereço: <%= b.endereco %></div><% } %>
-              <% } %>
             </div>
+            <% }); %>
           </div>
-          <% }); %>
         </div>
         <% } %>
       </div>
