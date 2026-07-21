@@ -69,13 +69,13 @@
           <form method="POST" action="/settings/sla/step/<%= stepName %>/mode" class="d-flex align-items-center gap-3 flex-wrap">
             <span class="small fw-semibold text-muted">Configuração:</span>
             <div class="form-check form-check-inline mb-0">
-              <input class="form-check-input" type="radio" name="mode" value="GLOBAL" id="mode-global-<%= idx %>"
-                     <%= !isIndividual ? 'checked' : '' %> onchange="this.form.submit()" />
+              <input class="form-check-input mode-toggle-radio" type="radio" name="mode" value="GLOBAL" id="mode-global-<%= idx %>"
+                     <%= !isIndividual ? 'checked' : '' %> />
               <label class="form-check-label small" for="mode-global-<%= idx %>">Global</label>
             </div>
             <div class="form-check form-check-inline mb-0">
-              <input class="form-check-input" type="radio" name="mode" value="INDIVIDUAL" id="mode-individual-<%= idx %>"
-                     <%= isIndividual ? 'checked' : '' %> onchange="this.form.submit()" />
+              <input class="form-check-input mode-toggle-radio" type="radio" name="mode" value="INDIVIDUAL" id="mode-individual-<%= idx %>"
+                     <%= isIndividual ? 'checked' : '' %> />
               <label class="form-check-label small" for="mode-individual-<%= idx %>">Individual por empresa</label>
             </div>
           </form>
@@ -122,8 +122,8 @@
             <% if (companyRule) { %>
             <div class="d-flex justify-content-between align-items-center mb-3">
               <span class="text-muted small"><i class="bi bi-building me-1"></i>Configuração própria de <strong><%= company.name %></strong></span>
-              <form method="POST" action="/settings/sla/step/<%= stepName %>/reset"
-                    onsubmit="return confirm('Remover a configuração de <%= company.name %> nesta etapa? Ela ficará sem prazo/notificação próprios até ser preenchida novamente.')">
+              <form method="POST" action="/settings/sla/step/<%= stepName %>/reset" class="confirm-clear-form"
+                    data-confirm-message="Remover a configuração de <%= company.name %> nesta etapa? Ela ficará sem prazo/notificação próprios até ser preenchida novamente.">
                 <input type="hidden" name="companyId" value="<%= company.companyId %>" />
                 <button type="submit" class="btn btn-sm btn-outline-danger">
                   <i class="bi bi-trash me-1"></i>Limpar configuração
@@ -171,13 +171,13 @@
       <form method="POST" action="/settings/beneficiarios/mode" class="d-flex align-items-center gap-3 flex-wrap">
         <span class="small fw-semibold text-muted">Configuração:</span>
         <div class="form-check form-check-inline mb-0">
-          <input class="form-check-input" type="radio" name="mode" value="GLOBAL" id="benef-mode-global"
-                 <%= !isBenefIndividual ? 'checked' : '' %> onchange="this.form.submit()" />
+          <input class="form-check-input mode-toggle-radio" type="radio" name="mode" value="GLOBAL" id="benef-mode-global"
+                 <%= !isBenefIndividual ? 'checked' : '' %> />
           <label class="form-check-label small" for="benef-mode-global">Global</label>
         </div>
         <div class="form-check form-check-inline mb-0">
-          <input class="form-check-input" type="radio" name="mode" value="INDIVIDUAL" id="benef-mode-individual"
-                 <%= isBenefIndividual ? 'checked' : '' %> onchange="this.form.submit()" />
+          <input class="form-check-input mode-toggle-radio" type="radio" name="mode" value="INDIVIDUAL" id="benef-mode-individual"
+                 <%= isBenefIndividual ? 'checked' : '' %> />
           <label class="form-check-label small" for="benef-mode-individual">Individual por empresa</label>
         </div>
       </form>
@@ -216,8 +216,8 @@
         <% if (companyRule) { %>
         <div class="d-flex justify-content-between align-items-center mb-3">
           <span class="text-muted small"><i class="bi bi-building me-1"></i>Configuração própria de <strong><%= company.name %></strong></span>
-          <form method="POST" action="/settings/beneficiarios/company/reset"
-                onsubmit="return confirm('Remover a configuração de <%= company.name %>? Ela ficará sem destinatário próprio até ser preenchida novamente.')">
+          <form method="POST" action="/settings/beneficiarios/company/reset" class="confirm-clear-form"
+                data-confirm-message="Remover a configuração de <%= company.name %>? Ela ficará sem destinatário próprio até ser preenchida novamente.">
             <input type="hidden" name="companyId" value="<%= company.companyId %>" />
             <button type="submit" class="btn btn-sm btn-outline-danger">
               <i class="bi bi-trash me-1"></i>Limpar configuração
@@ -253,3 +253,20 @@
   <br/><strong class="text-warning">⚠ Nenhuma empresa mapeada nas variáveis de ambiente (PIPEDRIVE_PASCHOINI_COMPANY_ID, PIPEDRIVE_FOCUS_COMPANY_ID, PIPEDRIVE_ATTIVOS_COMPANY_ID).</strong>
   <% } %>
 </div>
+
+<script>
+  // CSP bloqueia atributos inline (onchange/onsubmit) — vincula via addEventListener.
+  document.querySelectorAll('.mode-toggle-radio').forEach(function (radio) {
+    radio.addEventListener('change', function () {
+      radio.form.submit();
+    });
+  });
+
+  document.querySelectorAll('.confirm-clear-form').forEach(function (form) {
+    form.addEventListener('submit', function (ev) {
+      if (!confirm(form.dataset.confirmMessage)) {
+        ev.preventDefault();
+      }
+    });
+  });
+</script>
