@@ -37,11 +37,10 @@ export async function requestBeneficiaries(trackingId: string): Promise<void> {
   if (!tracking) throw new Error(`Contrato ${trackingId} não encontrado`);
 
   const companyId = (tracking.pipedriveDeal as any)?.companyId ?? null;
-  const specificRule = companyId
-    ? await prisma.beneficiaryNotifyRule.findFirst({ where: { companyId } })
-    : null;
   const globalRule = await prisma.beneficiaryNotifyRule.findFirst({ where: { companyId: null } });
-  const rule = specificRule ?? globalRule;
+  const rule = globalRule?.mode === 'INDIVIDUAL'
+    ? (companyId ? await prisma.beneficiaryNotifyRule.findFirst({ where: { companyId } }) : null)
+    : globalRule;
 
   const recipients = rule?.active && rule.notifyEmails
     ? rule.notifyEmails.split(',').map((e) => e.trim()).filter(Boolean)

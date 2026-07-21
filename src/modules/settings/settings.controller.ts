@@ -2,8 +2,8 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { setFlash } from '../../shared/middlewares/flash.middleware';
 import {
-  getAllSlaRules, updateSlaRule, upsertCompanySlaRule, deleteCompanySlaRule,
-  getBeneficiaryNotifyRules, upsertGlobalBeneficiaryNotify, upsertCompanyBeneficiaryNotify, deleteCompanyBeneficiaryNotify,
+  getAllSlaRules, updateSlaRule, upsertCompanySlaRule, deleteCompanySlaRule, setSlaStepMode,
+  getBeneficiaryNotifyRules, upsertGlobalBeneficiaryNotify, upsertCompanyBeneficiaryNotify, deleteCompanyBeneficiaryNotify, setBeneficiaryMode,
 } from './settings.service';
 import {
   getAllMappings, createMapping, updateMapping, deleteMapping, toggleMappingActive,
@@ -114,6 +114,18 @@ export async function postUpsertBeneficiaryCompany(req: Request, res: Response, 
   }
 }
 
+export async function postSetBeneficiaryMode(req: Request, res: Response, next: NextFunction) {
+  try {
+    const { mode } = z.object({ mode: z.enum(['GLOBAL', 'INDIVIDUAL']) }).parse(req.body);
+    await setBeneficiaryMode(mode);
+    setFlash(res, 'success', `Modo de configuração de beneficiários atualizado para ${mode === 'GLOBAL' ? 'Global' : 'Individual por empresa'}.`);
+    res.redirect('/settings/sla');
+  } catch (err: any) {
+    setFlash(res, 'error', err.message ?? 'Erro ao atualizar modo de configuração.');
+    res.redirect('/settings/sla');
+  }
+}
+
 export async function postResetBeneficiaryCompany(req: Request, res: Response, next: NextFunction) {
   try {
     const { companyId } = z.object({ companyId: z.string().min(1) }).parse(req.body);
@@ -198,6 +210,22 @@ export async function postUpsertCompanySla(req: Request, res: Response, next: Ne
     res.redirect('/settings/sla');
   } catch (err: any) {
     setFlash(res, 'error', err.message ?? 'Erro ao salvar configuração por empresa.');
+    res.redirect('/settings/sla');
+  }
+}
+
+export async function postSetSlaMode(req: Request, res: Response, next: NextFunction) {
+  try {
+    const stepName = req.params.stepName as StepName;
+    if (!STEP_ORDER_LIST.includes(stepName)) {
+      throw new Error('Etapa inválida.');
+    }
+    const { mode } = z.object({ mode: z.enum(['GLOBAL', 'INDIVIDUAL']) }).parse(req.body);
+    await setSlaStepMode(stepName, mode);
+    setFlash(res, 'success', `Modo de configuração atualizado para ${mode === 'GLOBAL' ? 'Global' : 'Individual por empresa'}.`);
+    res.redirect('/settings/sla');
+  } catch (err: any) {
+    setFlash(res, 'error', err.message ?? 'Erro ao atualizar modo de configuração.');
     res.redirect('/settings/sla');
   }
 }

@@ -30,11 +30,21 @@ const STEP_ORDER: StepName[] = [
 ];
 
 async function getSlaMap(companyId?: string | null): Promise<Map<StepName, number>> {
-  const globalRules = await prisma.slaRule.findMany({ where: { active: true, companyId: null } });
-  const map = new Map(globalRules.map((r) => [r.stepName, r.businessDays]));
-  if (companyId) {
-    const companyRules = await prisma.slaRule.findMany({ where: { active: true, companyId } });
-    for (const r of companyRules) map.set(r.stepName, r.businessDays);
+  const globalRules = await prisma.slaRule.findMany({ where: { companyId: null } });
+  const companyRules = companyId
+    ? await prisma.slaRule.findMany({ where: { companyId } })
+    : [];
+  const companyByStep = new Map(companyRules.map((r) => [r.stepName, r]));
+
+  const map = new Map<StepName, number>();
+  for (const g of globalRules) {
+    if (g.mode === 'INDIVIDUAL') {
+      // Modo Individual: usa exclusivamente a regra da empresa — sem herdar da global.
+      const companyRule = companyByStep.get(g.stepName);
+      if (companyRule?.active) map.set(g.stepName, companyRule.businessDays);
+    } else if (g.active) {
+      map.set(g.stepName, g.businessDays);
+    }
   }
   return map;
 }

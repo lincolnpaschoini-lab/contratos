@@ -234,6 +234,7 @@ model SlaRule {
   active          Boolean  @default(true)
   notifyEmails    String?  @map("notify_emails")
   notifyOnNewLead Boolean  @default(false) @map("notify_on_new_lead")
+  mode            String   @default("GLOBAL") // "GLOBAL" | "INDIVIDUAL" — só tem efeito na linha companyId:null
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -297,6 +298,7 @@ model BeneficiaryNotifyRule {
   companyId    String? @unique @map("company_id")
   notifyEmails String? @map("notify_emails")
   active       Boolean @default(true)
+  mode         String  @default("GLOBAL") // "GLOBAL" | "INDIVIDUAL" — só tem efeito na linha companyId:null
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

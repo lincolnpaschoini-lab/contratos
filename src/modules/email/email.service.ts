@@ -146,13 +146,18 @@ export async function sendDelayNotificationEmail(trackingId: string, stepId: str
     return;
   }
 
-  // Busca e-mails: regra específica da empresa → regra global → env var
+  // Busca e-mails: modo Global (padrão) usa a regra global direto; modo Individual usa exclusivamente a da empresa.
   const companyId = (tracking as any).pipedriveDeal?.companyId ?? null;
-  const specificRule = companyId
-    ? await prisma.slaRule.findFirst({ where: { stepName: delayedStep.stepName, companyId } })
-    : null;
   const globalRule = await prisma.slaRule.findFirst({ where: { stepName: delayedStep.stepName, companyId: null } });
-  const slaRule = specificRule ?? globalRule;
+  const slaRule = globalRule?.mode === 'INDIVIDUAL'
+    ? (companyId ? await prisma.slaRule.findFirst({ where: { stepName: delayedStep.stepName, companyId } }) : null)
+    : globalRule;
+
+  if (slaRule && !slaRule.active) {
+    logger.info(`[EMAIL] Alerta de atraso ignorado — regra de SLA inativa para ${delayedStep.stepName}${companyId ? ` (empresa ${companyId})` : ''}`);
+    return;
+  }
+
   const ruleEmails = slaRule?.notifyEmails
     ? slaRule.notifyEmails.split(',').map((e) => e.trim()).filter(Boolean)
     : [];
@@ -218,15 +223,14 @@ async function _sendNewLeadCore(trackingId: string, stepName: string): Promise<v
     return;
   }
 
-  // Fallback empresa → global
+  // Modo Global (padrão) usa a regra global direto; modo Individual usa exclusivamente a da empresa.
   const companyId = tracking.pipedriveDeal?.companyId ?? null;
-  const specificRule = companyId
-    ? await prisma.slaRule.findFirst({ where: { stepName: stepName as any, companyId } })
-    : null;
   const globalRule = await prisma.slaRule.findFirst({ where: { stepName: stepName as any, companyId: null } });
-  const slaRule = specificRule ?? globalRule;
+  const slaRule = globalRule?.mode === 'INDIVIDUAL'
+    ? (companyId ? await prisma.slaRule.findFirst({ where: { stepName: stepName as any, companyId } }) : null)
+    : globalRule;
 
-  if (!slaRule?.notifyOnNewLead) return;
+  if (!slaRule?.active || !slaRule?.notifyOnNewLead) return;
 
   const recipients = slaRule.notifyEmails
     ? slaRule.notifyEmails.split(',').map((e) => e.trim()).filter(Boolean)

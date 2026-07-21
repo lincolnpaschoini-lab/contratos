@@ -1,7 +1,7 @@
 <div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-2">
   <div>
     <h2 class="page-title">Configurações de SLA</h2>
-    <p class="text-muted mb-0">Define prazos e notificações por etapa. Configure regras globais (padrão) ou sobreponha por empresa.</p>
+    <p class="text-muted mb-0">Define prazos e notificações por etapa. Escolha, por etapa, entre uma configuração Global (vale pra todas as empresas) ou Individual (cada empresa configura a sua).</p>
   </div>
   <form method="POST" action="/settings/recalculate">
     <button type="submit" class="btn btn-sm btn-outline-warning">
@@ -29,10 +29,10 @@
 
 <div class="accordion" id="slaAccordion">
   <% STEP_NAMES.forEach(function(stepName, idx) {
-    const entry     = ruleMap[stepName] || { global: null, byCompany: {} };
-    const stepLabel = h.STEP_LABELS[stepName] || stepName;
-    const global    = entry.global;
-    const hasCompanyOverrides = companies.some(function(c) { return !!entry.byCompany[c.companyId]; });
+    const entry       = ruleMap[stepName] || { global: null, byCompany: {} };
+    const stepLabel   = h.STEP_LABELS[stepName] || stepName;
+    const global      = entry.global;
+    const isIndividual = !!(global && global.mode === 'INDIVIDUAL');
   %>
   <div class="accordion-item border mb-2 rounded shadow-sm overflow-hidden">
 
@@ -43,19 +43,18 @@
               aria-expanded="false">
         <div class="d-flex align-items-center gap-2 flex-wrap">
           <strong><%= stepLabel %></strong>
-          <% if (global) { %>
+          <% if (isIndividual) { %>
+            <span class="badge bg-info text-white"><i class="bi bi-building me-1"></i>Individual por empresa</span>
+          <% } else if (global) { %>
             <span class="badge bg-<%= global.active ? 'success' : 'secondary' %>">
               <%= global.active ? 'Ativo' : 'Inativo' %>
             </span>
             <span class="badge bg-light text-dark border">
               Global: <%= global.businessDays %> dia<%= global.businessDays !== 1 ? 's' : '' %> útil<%= global.businessDays !== 1 ? 'eis' : '' %>
             </span>
-          <% } %>
-          <% if (hasCompanyOverrides) { %>
-            <span class="badge bg-info text-white"><i class="bi bi-building me-1"></i>Tem overrides por empresa</span>
-          <% } %>
-          <% if (global && global.notifyOnNewLead) { %>
-            <span class="badge bg-primary text-white"><i class="bi bi-bell-fill me-1"></i>Notifica novo lead</span>
+            <% if (global.notifyOnNewLead) { %>
+              <span class="badge bg-primary text-white"><i class="bi bi-bell-fill me-1"></i>Notifica novo lead</span>
+            <% } %>
           <% } %>
         </div>
       </button>
@@ -65,26 +64,50 @@
     <div id="step-<%= idx %>" class="accordion-collapse collapse">
       <div class="accordion-body p-0">
 
-        <!-- Abas de empresa -->
+        <!-- Toggle Global / Individual por empresa -->
+        <div class="px-3 pt-3 pb-2 bg-light border-bottom">
+          <form method="POST" action="/settings/sla/step/<%= stepName %>/mode" class="d-flex align-items-center gap-3 flex-wrap">
+            <span class="small fw-semibold text-muted">Configuração:</span>
+            <div class="form-check form-check-inline mb-0">
+              <input class="form-check-input" type="radio" name="mode" value="GLOBAL" id="mode-global-<%= idx %>"
+                     <%= !isIndividual ? 'checked' : '' %> onchange="this.form.submit()" />
+              <label class="form-check-label small" for="mode-global-<%= idx %>">Global</label>
+            </div>
+            <div class="form-check form-check-inline mb-0">
+              <input class="form-check-input" type="radio" name="mode" value="INDIVIDUAL" id="mode-individual-<%= idx %>"
+                     <%= isIndividual ? 'checked' : '' %> onchange="this.form.submit()" />
+              <label class="form-check-label small" for="mode-individual-<%= idx %>">Individual por empresa</label>
+            </div>
+          </form>
+        </div>
+
+        <% if (!isIndividual) { %>
+        <!-- ── Configuração Global ────────────────────────────────── -->
+        <div class="p-3 bg-light">
+          <% if (global) { %>
+          <form method="POST" action="/settings/sla/<%= global.id %>">
+            <%- include('../partials/sla-rule-fields', { rule: global, hint: 'Aplica-se a todos os contratos, de todas as empresas.' }) %>
+          </form>
+          <% } else { %>
+          <div class="alert alert-warning mb-0">
+            <i class="bi bi-exclamation-triangle me-2"></i>Regra global não encontrada para esta etapa. Execute a reconciliação ou contate o suporte.
+          </div>
+          <% } %>
+        </div>
+        <% } else { %>
+        <!-- ── Abas por Empresa ────────────────────────────────── -->
         <ul class="nav nav-tabs px-3 pt-3 bg-light border-bottom" id="tabs-<%= idx %>" role="tablist">
+          <% companies.forEach(function(company, ci) { %>
           <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="tab-global-<%= idx %>-btn"
-                    data-bs-toggle="tab" data-bs-target="#tab-global-<%= idx %>"
-                    type="button" role="tab">
-              <i class="bi bi-globe2 me-1"></i>Global (padrão)
-            </button>
-          </li>
-          <% companies.forEach(function(company) { %>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link" id="tab-<%= idx %>-<%= company.companyId %>-btn"
+            <button class="nav-link <%= ci === 0 ? 'active' : '' %>" id="tab-<%= idx %>-<%= company.companyId %>-btn"
                     data-bs-toggle="tab" data-bs-target="#tab-<%= idx %>-<%= company.companyId %>"
                     type="button" role="tab">
               <%= company.name %>
               <% const _cr = entry.byCompany[company.companyId];
                  if (_cr && (_cr.notifyEmails || _cr.notifyOnNewLead)) { %>
-                <span class="badge bg-success ms-1" title="Override com notificações configuradas">✓</span>
+                <span class="badge bg-success ms-1" title="Configurado com notificações">✓</span>
               <% } else if (_cr) { %>
-                <span class="badge bg-secondary ms-1" title="Override de SLA sem notificações">~</span>
+                <span class="badge bg-secondary ms-1" title="Configurado sem notificações">~</span>
               <% } %>
             </button>
           </li>
@@ -92,54 +115,39 @@
         </ul>
 
         <div class="tab-content p-3 bg-light">
-
-          <!-- ── Aba Global ─────────────────────────────────────── -->
-          <div class="tab-pane fade show active" id="tab-global-<%= idx %>" role="tabpanel">
-            <% if (global) { %>
-            <form method="POST" action="/settings/sla/<%= global.id %>">
-              <%- include('../partials/sla-rule-fields', { rule: global, hint: 'Aplica-se a todos os contratos sem override de empresa específica.' }) %>
-            </form>
-            <% } else { %>
-            <div class="alert alert-warning mb-0">
-              <i class="bi bi-exclamation-triangle me-2"></i>Regra global não encontrada para esta etapa. Execute a reconciliação ou contate o suporte.
-            </div>
-            <% } %>
-          </div>
-
-          <!-- ── Abas por Empresa ────────────────────────────────── -->
-          <% companies.forEach(function(company) {
+          <% companies.forEach(function(company, ci) {
             const companyRule = entry.byCompany[company.companyId] || null;
           %>
-          <div class="tab-pane fade" id="tab-<%= idx %>-<%= company.companyId %>" role="tabpanel">
-            <% if (!companyRule) { %>
-            <div class="alert alert-info mb-3 small">
-              <i class="bi bi-info-circle me-2"></i>
-              Nenhum override configurado para <strong><%= company.name %></strong> nesta etapa.
-              Preencha abaixo para criar um — deixe em branco para herdar da regra <strong>Global</strong>.
-            </div>
-            <% } else { %>
+          <div class="tab-pane fade <%= ci === 0 ? 'show active' : '' %>" id="tab-<%= idx %>-<%= company.companyId %>" role="tabpanel">
+            <% if (companyRule) { %>
             <div class="d-flex justify-content-between align-items-center mb-3">
-              <span class="text-muted small"><i class="bi bi-building me-1"></i>Override ativo para <strong><%= company.name %></strong></span>
+              <span class="text-muted small"><i class="bi bi-building me-1"></i>Configuração própria de <strong><%= company.name %></strong></span>
               <form method="POST" action="/settings/sla/step/<%= stepName %>/reset"
-                    onsubmit="return confirm('Remover override de <%= company.name %> nesta etapa? Ela voltará a usar a regra Global.')">
+                    onsubmit="return confirm('Remover a configuração de <%= company.name %> nesta etapa? Ela ficará sem prazo/notificação próprios até ser preenchida novamente.')">
                 <input type="hidden" name="companyId" value="<%= company.companyId %>" />
                 <button type="submit" class="btn btn-sm btn-outline-danger">
-                  <i class="bi bi-arrow-counterclockwise me-1"></i>Resetar para padrão
+                  <i class="bi bi-trash me-1"></i>Limpar configuração
                 </button>
               </form>
+            </div>
+            <% } else { %>
+            <div class="alert alert-info mb-3 small">
+              <i class="bi bi-info-circle me-2"></i>
+              Nenhuma configuração para <strong><%= company.name %></strong> ainda nesta etapa. Preencha abaixo.
             </div>
             <% } %>
             <form method="POST" action="/settings/sla/step/<%= stepName %>">
               <input type="hidden" name="companyId" value="<%= company.companyId %>" />
               <%- include('../partials/sla-rule-fields', {
-                rule: companyRule || { businessDays: global ? global.businessDays : 1, active: true, notifyEmails: null, notifyOnNewLead: false },
-                hint: 'Override específico para contratos da empresa ' + company.name + '. Sobrescreve a regra global nesta etapa.'
+                rule: companyRule || { businessDays: 1, active: true, notifyEmails: null, notifyOnNewLead: false },
+                hint: 'Configuração própria de ' + company.name + ' — independente da regra Global.'
               }) %>
             </form>
           </div>
           <% }); %>
+        </div>
+        <% } %>
 
-        </div><!-- /tab-content -->
       </div>
     </div>
   </div>
@@ -147,28 +155,53 @@
 </div>
 
 <!-- ── Notificação de Beneficiários ─────────────────────────────────────── -->
+<%
+  const beneficiaryGlobal = beneficiaryRuleMap.global;
+  const isBenefIndividual = !!(beneficiaryGlobal && beneficiaryGlobal.mode === 'INDIVIDUAL');
+%>
 <div class="card border mb-3 shadow-sm">
-  <div class="card-header bg-white">
+  <div class="card-header bg-white d-flex align-items-center flex-wrap gap-2">
     <strong><i class="bi bi-people-fill me-2"></i>Beneficiários</strong>
-    <span class="text-muted small ms-2">Quem recebe o pedido de definição de beneficiários PF/PJ antes do envio ao Clicksign</span>
+    <span class="text-muted small">Quem recebe o pedido de definição de beneficiários PF/PJ antes do envio ao Clicksign</span>
   </div>
   <div class="card-body p-0">
+
+    <!-- Toggle Global / Individual por empresa -->
+    <div class="px-3 pt-3 pb-2 bg-light border-bottom">
+      <form method="POST" action="/settings/beneficiarios/mode" class="d-flex align-items-center gap-3 flex-wrap">
+        <span class="small fw-semibold text-muted">Configuração:</span>
+        <div class="form-check form-check-inline mb-0">
+          <input class="form-check-input" type="radio" name="mode" value="GLOBAL" id="benef-mode-global"
+                 <%= !isBenefIndividual ? 'checked' : '' %> onchange="this.form.submit()" />
+          <label class="form-check-label small" for="benef-mode-global">Global</label>
+        </div>
+        <div class="form-check form-check-inline mb-0">
+          <input class="form-check-input" type="radio" name="mode" value="INDIVIDUAL" id="benef-mode-individual"
+                 <%= isBenefIndividual ? 'checked' : '' %> onchange="this.form.submit()" />
+          <label class="form-check-label small" for="benef-mode-individual">Individual por empresa</label>
+        </div>
+      </form>
+    </div>
+
+    <% if (!isBenefIndividual) { %>
+    <div class="p-3 bg-light">
+      <form method="POST" action="/settings/beneficiarios">
+        <%- include('../partials/beneficiary-rule-fields', {
+          rule: beneficiaryGlobal || { notifyEmails: null, active: true },
+          hint: 'Aplica-se a todos os contratos, de todas as empresas.'
+        }) %>
+      </form>
+    </div>
+    <% } else { %>
     <ul class="nav nav-tabs px-3 pt-3 bg-light border-bottom" id="tabs-beneficiary" role="tablist">
+      <% companies.forEach(function(company, ci) { %>
       <li class="nav-item" role="presentation">
-        <button class="nav-link active" id="tab-beneficiary-global-btn"
-                data-bs-toggle="tab" data-bs-target="#tab-beneficiary-global"
-                type="button" role="tab">
-          <i class="bi bi-globe2 me-1"></i>Global (padrão)
-        </button>
-      </li>
-      <% companies.forEach(function(company) { %>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link" id="tab-beneficiary-<%= company.companyId %>-btn"
+        <button class="nav-link <%= ci === 0 ? 'active' : '' %>" id="tab-beneficiary-<%= company.companyId %>-btn"
                 data-bs-toggle="tab" data-bs-target="#tab-beneficiary-<%= company.companyId %>"
                 type="button" role="tab">
           <%= company.name %>
           <% if (beneficiaryRuleMap.byCompany[company.companyId]) { %>
-            <span class="badge bg-success ms-1" title="Override configurado">✓</span>
+            <span class="badge bg-success ms-1" title="Configurado">✓</span>
           <% } %>
         </button>
       </li>
@@ -176,53 +209,46 @@
     </ul>
 
     <div class="tab-content p-3 bg-light">
-      <div class="tab-pane fade show active" id="tab-beneficiary-global" role="tabpanel">
-        <form method="POST" action="/settings/beneficiarios">
-          <%- include('../partials/beneficiary-rule-fields', {
-            rule: beneficiaryRuleMap.global || { notifyEmails: null, active: true },
-            hint: 'Usado quando não há override para a empresa do contrato.'
-          }) %>
-        </form>
-      </div>
-
-      <% companies.forEach(function(company) {
+      <% companies.forEach(function(company, ci) {
         const companyRule = beneficiaryRuleMap.byCompany[company.companyId] || null;
       %>
-      <div class="tab-pane fade" id="tab-beneficiary-<%= company.companyId %>" role="tabpanel">
+      <div class="tab-pane fade <%= ci === 0 ? 'show active' : '' %>" id="tab-beneficiary-<%= company.companyId %>" role="tabpanel">
         <% if (companyRule) { %>
         <div class="d-flex justify-content-between align-items-center mb-3">
-          <span class="text-muted small"><i class="bi bi-building me-1"></i>Override ativo para <strong><%= company.name %></strong></span>
+          <span class="text-muted small"><i class="bi bi-building me-1"></i>Configuração própria de <strong><%= company.name %></strong></span>
           <form method="POST" action="/settings/beneficiarios/company/reset"
-                onsubmit="return confirm('Remover override de <%= company.name %>? Ela voltará a usar a regra Global.')">
+                onsubmit="return confirm('Remover a configuração de <%= company.name %>? Ela ficará sem destinatário próprio até ser preenchida novamente.')">
             <input type="hidden" name="companyId" value="<%= company.companyId %>" />
             <button type="submit" class="btn btn-sm btn-outline-danger">
-              <i class="bi bi-arrow-counterclockwise me-1"></i>Resetar para padrão
+              <i class="bi bi-trash me-1"></i>Limpar configuração
             </button>
           </form>
         </div>
         <% } else { %>
         <div class="alert alert-info mb-3 small">
           <i class="bi bi-info-circle me-2"></i>
-          Nenhum override configurado para <strong><%= company.name %></strong>. Preencha abaixo para criar um.
+          Nenhuma configuração para <strong><%= company.name %></strong> ainda. Preencha abaixo.
         </div>
         <% } %>
         <form method="POST" action="/settings/beneficiarios/company">
           <input type="hidden" name="companyId" value="<%= company.companyId %>" />
           <%- include('../partials/beneficiary-rule-fields', {
             rule: companyRule || { notifyEmails: null, active: true },
-            hint: 'Override específico para contratos da empresa ' + company.name + '.'
+            hint: 'Configuração própria de ' + company.name + ' — independente da regra Global.'
           }) %>
         </form>
       </div>
       <% }); %>
     </div>
+    <% } %>
   </div>
 </div>
 
 <div class="alert alert-info mt-3 small">
   <i class="bi bi-info-circle me-2"></i>
-  <strong>Como funciona:</strong> O sistema usa a regra da <strong>empresa específica</strong> do contrato quando disponível; caso contrário usa a regra <strong>Global</strong>.
-  Os e-mails configurados por etapa substituem a variável de ambiente <code>DELAY_NOTIFY_EMAILS</code>.
+  <strong>Como funciona:</strong> Cada etapa (e o bloco Beneficiários) tem seu próprio modo — <strong>Global</strong> (padrão: uma única configuração vale pra todas as empresas) ou <strong>Individual por empresa</strong> (cada empresa configura a sua, sem herdar nada da Global).
+  Trocar de modo não apaga o que já foi configurado do outro lado — só passa a ignorar até você trocar de volta.
+  Os e-mails configurados substituem a variável de ambiente <code>DELAY_NOTIFY_EMAILS</code> quando em modo Global.
   <% if (companies.length === 0) { %>
   <br/><strong class="text-warning">⚠ Nenhuma empresa mapeada nas variáveis de ambiente (PIPEDRIVE_PASCHOINI_COMPANY_ID, PIPEDRIVE_FOCUS_COMPANY_ID, PIPEDRIVE_ATTIVOS_COMPANY_ID).</strong>
   <% } %>

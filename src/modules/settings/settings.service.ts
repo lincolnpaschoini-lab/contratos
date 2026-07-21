@@ -25,6 +25,14 @@ export async function upsertCompanySlaRule(
   return prisma.slaRule.create({ data: { stepName, companyId, ...data } });
 }
 
+export async function setSlaStepMode(stepName: StepName, mode: 'GLOBAL' | 'INDIVIDUAL') {
+  const existing = await prisma.slaRule.findFirst({ where: { stepName, companyId: null } });
+  if (existing) {
+    return prisma.slaRule.update({ where: { id: existing.id }, data: { mode } });
+  }
+  return prisma.slaRule.create({ data: { stepName, companyId: null, mode, businessDays: 1, active: true } });
+}
+
 export async function updateSlaRule(
   id: string,
   businessDays: number,
@@ -73,4 +81,12 @@ export async function deleteCompanyBeneficiaryNotify(companyId: string) {
   const existing = await prisma.beneficiaryNotifyRule.findFirst({ where: { companyId } });
   if (!existing) return;
   await prisma.beneficiaryNotifyRule.delete({ where: { id: existing.id } });
+}
+
+export async function setBeneficiaryMode(mode: 'GLOBAL' | 'INDIVIDUAL') {
+  const existing = await prisma.beneficiaryNotifyRule.findFirst({ where: { companyId: null } });
+  if (existing) {
+    return prisma.beneficiaryNotifyRule.update({ where: { id: existing.id }, data: { mode } });
+  }
+  return prisma.beneficiaryNotifyRule.create({ data: { companyId: null, mode, active: true } });
 }
