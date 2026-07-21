@@ -35,10 +35,10 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
       </div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
+      <% if (locals.currentUser && locals.currentUser.role === 'ADMIN') { %>
       <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalAssign">
         <i class="bi bi-person-gear me-1"></i>Atribuir
       </button>
-      <% if (locals.currentUser && locals.currentUser.role === 'ADMIN') { %>
       <form method="POST" action="/contracts/<%= contract.id %>/sync-pipedrive" class="d-inline">
         <button type="submit" class="btn btn-sm btn-outline-info" title="Re-buscar dados da empresa e contato no Pipedrive">
           <i class="bi bi-arrow-repeat me-1"></i>Sincronizar Pipedrive
@@ -457,6 +457,7 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
           <!-- Ações -->
           <% if (canStart || canComplete || step.stepName === 'CONTRACT_REGISTRATION') { %>
           <div class="timeline-actions mt-2 d-flex gap-2 flex-wrap">
+            <% if (locals.currentUser && locals.currentUser.role === 'ADMIN') { %>
             <% if (canStart) { %>
             <form method="POST" action="/contracts/<%= contract.id %>/steps/<%= step.id %>/start" class="d-inline">
               <button type="submit" class="btn btn-sm btn-warning">
@@ -478,6 +479,7 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
               </button>
             </form>
             <% } %>
+            <% } %>
             <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="collapse"
                     data-bs-target="#stepDetail<%= step.id %>">
               <i class="bi bi-chat-text me-1"></i>Detalhes
@@ -488,6 +490,7 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
           <div class="collapse mt-2" id="stepDetail<%= step.id %>">
             <div class="step-detail-panel">
               <!-- Observações -->
+              <% if (locals.currentUser && locals.currentUser.role === 'ADMIN') { %>
               <form method="POST" action="/contracts/<%= contract.id %>/steps/<%= step.id %>/notes" class="mb-3">
                 <label class="form-label small fw-semibold">Observações</label>
                 <textarea name="notes" class="form-control form-control-sm" rows="2"
@@ -505,6 +508,12 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
                 </select>
                 <button type="submit" class="btn btn-sm btn-outline-secondary">Salvar</button>
               </form>
+              <% } else if (step.notes) { %>
+              <div class="mb-3">
+                <div class="form-label small fw-semibold mb-1">Observações</div>
+                <div class="small text-muted"><%= step.notes %></div>
+              </div>
+              <% } %>
 
               <!-- Histórico -->
               <% if (step.histories && step.histories.length > 0) { %>
@@ -553,11 +562,13 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
       <% if (contract.beneficiariesRequestedAt) { %>E-mail enviado em <%= h.formatDateTime(contract.beneficiariesRequestedAt) %>.<% } %>
     </div>
   </div>
+  <% if (locals.currentUser && locals.currentUser.role === 'ADMIN') { %>
   <form method="POST" action="/contracts/<%= contract.id %>/resend-beneficiaries-email">
     <button type="submit" class="btn btn-outline-primary">
       <i class="bi bi-envelope me-1"></i>Reenviar e-mail
     </button>
   </form>
+  <% } %>
 </div>
 <% } %>
 
@@ -569,11 +580,13 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
     <div class="fw-semibold">Contrato em Assinatura sem envelope Clicksign</div>
     <div class="small text-muted">O envio automático pode ter falhado ou sido ignorado. Você pode disparar manualmente.</div>
   </div>
+  <% if (locals.currentUser && locals.currentUser.role === 'ADMIN') { %>
   <form method="POST" action="/contracts/<%= contract.id %>/clicksign-send">
     <button type="submit" class="btn btn-warning">
       <i class="bi bi-send me-1"></i>Enviar para Clicksign
     </button>
   </form>
+  <% } %>
 </div>
 <% } %>
 
@@ -599,11 +612,13 @@ const stepsOrdered = contract.steps.slice().sort((a, b) => a.stepOrder - b.stepO
         <i class="bi bi-box-arrow-up-right me-1"></i>Ver no Clicksign
       </a>
       <% } %>
+      <% if (locals.currentUser && locals.currentUser.role === 'ADMIN') { %>
       <form method="POST" action="/contracts/<%= contract.id %>/clicksign-refresh" class="d-inline">
         <button type="submit" class="btn btn-sm btn-outline-primary">
           <i class="bi bi-arrow-repeat me-1"></i>Atualizar status
         </button>
       </form>
+      <% } %>
     </div>
   </div>
   <div class="card-body">
