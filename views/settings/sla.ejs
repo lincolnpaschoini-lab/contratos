@@ -43,9 +43,11 @@
               aria-expanded="false">
         <div class="d-flex align-items-center gap-2 flex-wrap">
           <strong><%= stepLabel %></strong>
-          <% if (isIndividual) { %>
+          <span class="header-badge-individual" style="<%= !isIndividual ? 'display:none' : '' %>">
             <span class="badge bg-info text-white"><i class="bi bi-building me-1"></i>Individual por empresa</span>
-          <% } else if (global) { %>
+          </span>
+          <span class="header-badge-global d-flex align-items-center gap-2 flex-wrap" style="<%= isIndividual ? 'display:none' : '' %>">
+            <% if (global) { %>
             <span class="badge bg-<%= global.active ? 'success' : 'secondary' %>">
               <%= global.active ? 'Ativo' : 'Inativo' %>
             </span>
@@ -55,7 +57,8 @@
             <% if (global.notifyOnNewLead) { %>
               <span class="badge bg-primary text-white"><i class="bi bi-bell-fill me-1"></i>Notifica novo lead</span>
             <% } %>
-          <% } %>
+            <% } %>
+          </span>
         </div>
       </button>
     </h2>
@@ -81,9 +84,8 @@
           </form>
         </div>
 
-        <% if (!isIndividual) { %>
         <!-- ── Configuração Global ────────────────────────────────── -->
-        <div class="p-3 bg-light">
+        <div class="p-3 bg-light mode-panel-global" style="<%= isIndividual ? 'display:none' : '' %>">
           <% if (global) { %>
           <form method="POST" action="/settings/sla/<%= global.id %>">
             <%- include('../partials/sla-rule-fields', { rule: global, hint: 'Aplica-se a todos os contratos, de todas as empresas.' }) %>
@@ -94,59 +96,60 @@
           </div>
           <% } %>
         </div>
-        <% } else { %>
-        <!-- ── Abas por Empresa ────────────────────────────────── -->
-        <ul class="nav nav-tabs px-3 pt-3 bg-light border-bottom" id="tabs-<%= idx %>" role="tablist">
-          <% companies.forEach(function(company, ci) { %>
-          <li class="nav-item" role="presentation">
-            <button class="nav-link <%= ci === 0 ? 'active' : '' %>" id="tab-<%= idx %>-<%= company.companyId %>-btn"
-                    data-bs-toggle="tab" data-bs-target="#tab-<%= idx %>-<%= company.companyId %>"
-                    type="button" role="tab">
-              <%= company.name %>
-              <% const _cr = entry.byCompany[company.companyId];
-                 if (_cr && (_cr.notifyEmails || _cr.notifyOnNewLead)) { %>
-                <span class="badge bg-success ms-1" title="Configurado com notificações">✓</span>
-              <% } else if (_cr) { %>
-                <span class="badge bg-secondary ms-1" title="Configurado sem notificações">~</span>
-              <% } %>
-            </button>
-          </li>
-          <% }); %>
-        </ul>
 
-        <div class="tab-content p-3 bg-light">
-          <% companies.forEach(function(company, ci) {
-            const companyRule = entry.byCompany[company.companyId] || null;
-          %>
-          <div class="tab-pane fade <%= ci === 0 ? 'show active' : '' %>" id="tab-<%= idx %>-<%= company.companyId %>" role="tabpanel">
-            <% if (companyRule) { %>
-            <div class="d-flex justify-content-between align-items-center mb-3">
-              <span class="text-muted small"><i class="bi bi-building me-1"></i>Configuração própria de <strong><%= company.name %></strong></span>
-              <form method="POST" action="/settings/sla/step/<%= stepName %>/reset" class="confirm-clear-form"
-                    data-confirm-message="Remover a configuração de <%= company.name %> nesta etapa? Ela ficará sem prazo/notificação próprios até ser preenchida novamente.">
+        <!-- ── Abas por Empresa ────────────────────────────────── -->
+        <div class="mode-panel-individual" style="<%= !isIndividual ? 'display:none' : '' %>">
+          <ul class="nav nav-tabs px-3 pt-3 bg-light border-bottom" id="tabs-<%= idx %>" role="tablist">
+            <% companies.forEach(function(company, ci) { %>
+            <li class="nav-item" role="presentation">
+              <button class="nav-link <%= ci === 0 ? 'active' : '' %>" id="tab-<%= idx %>-<%= company.companyId %>-btn"
+                      data-bs-toggle="tab" data-bs-target="#tab-<%= idx %>-<%= company.companyId %>"
+                      type="button" role="tab">
+                <%= company.name %>
+                <% const _cr = entry.byCompany[company.companyId];
+                   if (_cr && (_cr.notifyEmails || _cr.notifyOnNewLead)) { %>
+                  <span class="badge bg-success ms-1" title="Configurado com notificações">✓</span>
+                <% } else if (_cr) { %>
+                  <span class="badge bg-secondary ms-1" title="Configurado sem notificações">~</span>
+                <% } %>
+              </button>
+            </li>
+            <% }); %>
+          </ul>
+
+          <div class="tab-content p-3 bg-light">
+            <% companies.forEach(function(company, ci) {
+              const companyRule = entry.byCompany[company.companyId] || null;
+            %>
+            <div class="tab-pane fade <%= ci === 0 ? 'show active' : '' %>" id="tab-<%= idx %>-<%= company.companyId %>" role="tabpanel">
+              <% if (companyRule) { %>
+              <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="text-muted small"><i class="bi bi-building me-1"></i>Configuração própria de <strong><%= company.name %></strong></span>
+                <form method="POST" action="/settings/sla/step/<%= stepName %>/reset" class="confirm-clear-form"
+                      data-confirm-message="Remover a configuração de <%= company.name %> nesta etapa? Ela ficará sem prazo/notificação próprios até ser preenchida novamente.">
+                  <input type="hidden" name="companyId" value="<%= company.companyId %>" />
+                  <button type="submit" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-trash me-1"></i>Limpar configuração
+                  </button>
+                </form>
+              </div>
+              <% } else { %>
+              <div class="alert alert-info mb-3 small">
+                <i class="bi bi-info-circle me-2"></i>
+                Nenhuma configuração para <strong><%= company.name %></strong> ainda nesta etapa. Preencha abaixo.
+              </div>
+              <% } %>
+              <form method="POST" action="/settings/sla/step/<%= stepName %>">
                 <input type="hidden" name="companyId" value="<%= company.companyId %>" />
-                <button type="submit" class="btn btn-sm btn-outline-danger">
-                  <i class="bi bi-trash me-1"></i>Limpar configuração
-                </button>
+                <%- include('../partials/sla-rule-fields', {
+                  rule: companyRule || { businessDays: 1, active: true, notifyEmails: null, notifyOnNewLead: false },
+                  hint: 'Configuração própria de ' + company.name + ' — independente da regra Global.'
+                }) %>
               </form>
             </div>
-            <% } else { %>
-            <div class="alert alert-info mb-3 small">
-              <i class="bi bi-info-circle me-2"></i>
-              Nenhuma configuração para <strong><%= company.name %></strong> ainda nesta etapa. Preencha abaixo.
-            </div>
-            <% } %>
-            <form method="POST" action="/settings/sla/step/<%= stepName %>">
-              <input type="hidden" name="companyId" value="<%= company.companyId %>" />
-              <%- include('../partials/sla-rule-fields', {
-                rule: companyRule || { businessDays: 1, active: true, notifyEmails: null, notifyOnNewLead: false },
-                hint: 'Configuração própria de ' + company.name + ' — independente da regra Global.'
-              }) %>
-            </form>
+            <% }); %>
           </div>
-          <% }); %>
         </div>
-        <% } %>
 
       </div>
     </div>
@@ -183,8 +186,7 @@
       </form>
     </div>
 
-    <% if (!isBenefIndividual) { %>
-    <div class="p-3 bg-light">
+    <div class="p-3 bg-light mode-panel-global" style="<%= isBenefIndividual ? 'display:none' : '' %>">
       <form method="POST" action="/settings/beneficiarios">
         <%- include('../partials/beneficiary-rule-fields', {
           rule: beneficiaryGlobal || { notifyEmails: null, active: true },
@@ -192,55 +194,56 @@
         }) %>
       </form>
     </div>
-    <% } else { %>
-    <ul class="nav nav-tabs px-3 pt-3 bg-light border-bottom" id="tabs-beneficiary" role="tablist">
-      <% companies.forEach(function(company, ci) { %>
-      <li class="nav-item" role="presentation">
-        <button class="nav-link <%= ci === 0 ? 'active' : '' %>" id="tab-beneficiary-<%= company.companyId %>-btn"
-                data-bs-toggle="tab" data-bs-target="#tab-beneficiary-<%= company.companyId %>"
-                type="button" role="tab">
-          <%= company.name %>
-          <% if (beneficiaryRuleMap.byCompany[company.companyId]) { %>
-            <span class="badge bg-success ms-1" title="Configurado">✓</span>
-          <% } %>
-        </button>
-      </li>
-      <% }); %>
-    </ul>
 
-    <div class="tab-content p-3 bg-light">
-      <% companies.forEach(function(company, ci) {
-        const companyRule = beneficiaryRuleMap.byCompany[company.companyId] || null;
-      %>
-      <div class="tab-pane fade <%= ci === 0 ? 'show active' : '' %>" id="tab-beneficiary-<%= company.companyId %>" role="tabpanel">
-        <% if (companyRule) { %>
-        <div class="d-flex justify-content-between align-items-center mb-3">
-          <span class="text-muted small"><i class="bi bi-building me-1"></i>Configuração própria de <strong><%= company.name %></strong></span>
-          <form method="POST" action="/settings/beneficiarios/company/reset" class="confirm-clear-form"
-                data-confirm-message="Remover a configuração de <%= company.name %>? Ela ficará sem destinatário próprio até ser preenchida novamente.">
+    <div class="mode-panel-individual" style="<%= !isBenefIndividual ? 'display:none' : '' %>">
+      <ul class="nav nav-tabs px-3 pt-3 bg-light border-bottom" id="tabs-beneficiary" role="tablist">
+        <% companies.forEach(function(company, ci) { %>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link <%= ci === 0 ? 'active' : '' %>" id="tab-beneficiary-<%= company.companyId %>-btn"
+                  data-bs-toggle="tab" data-bs-target="#tab-beneficiary-<%= company.companyId %>"
+                  type="button" role="tab">
+            <%= company.name %>
+            <% if (beneficiaryRuleMap.byCompany[company.companyId]) { %>
+              <span class="badge bg-success ms-1" title="Configurado">✓</span>
+            <% } %>
+          </button>
+        </li>
+        <% }); %>
+      </ul>
+
+      <div class="tab-content p-3 bg-light">
+        <% companies.forEach(function(company, ci) {
+          const companyRule = beneficiaryRuleMap.byCompany[company.companyId] || null;
+        %>
+        <div class="tab-pane fade <%= ci === 0 ? 'show active' : '' %>" id="tab-beneficiary-<%= company.companyId %>" role="tabpanel">
+          <% if (companyRule) { %>
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="text-muted small"><i class="bi bi-building me-1"></i>Configuração própria de <strong><%= company.name %></strong></span>
+            <form method="POST" action="/settings/beneficiarios/company/reset" class="confirm-clear-form"
+                  data-confirm-message="Remover a configuração de <%= company.name %>? Ela ficará sem destinatário próprio até ser preenchida novamente.">
+              <input type="hidden" name="companyId" value="<%= company.companyId %>" />
+              <button type="submit" class="btn btn-sm btn-outline-danger">
+                <i class="bi bi-trash me-1"></i>Limpar configuração
+              </button>
+            </form>
+          </div>
+          <% } else { %>
+          <div class="alert alert-info mb-3 small">
+            <i class="bi bi-info-circle me-2"></i>
+            Nenhuma configuração para <strong><%= company.name %></strong> ainda. Preencha abaixo.
+          </div>
+          <% } %>
+          <form method="POST" action="/settings/beneficiarios/company">
             <input type="hidden" name="companyId" value="<%= company.companyId %>" />
-            <button type="submit" class="btn btn-sm btn-outline-danger">
-              <i class="bi bi-trash me-1"></i>Limpar configuração
-            </button>
+            <%- include('../partials/beneficiary-rule-fields', {
+              rule: companyRule || { notifyEmails: null, active: true },
+              hint: 'Configuração própria de ' + company.name + ' — independente da regra Global.'
+            }) %>
           </form>
         </div>
-        <% } else { %>
-        <div class="alert alert-info mb-3 small">
-          <i class="bi bi-info-circle me-2"></i>
-          Nenhuma configuração para <strong><%= company.name %></strong> ainda. Preencha abaixo.
-        </div>
-        <% } %>
-        <form method="POST" action="/settings/beneficiarios/company">
-          <input type="hidden" name="companyId" value="<%= company.companyId %>" />
-          <%- include('../partials/beneficiary-rule-fields', {
-            rule: companyRule || { notifyEmails: null, active: true },
-            hint: 'Configuração própria de ' + company.name + ' — independente da regra Global.'
-          }) %>
-        </form>
+        <% }); %>
       </div>
-      <% }); %>
     </div>
-    <% } %>
   </div>
 </div>
 
@@ -256,9 +259,33 @@
 
 <script>
   // CSP bloqueia atributos inline (onchange/onsubmit) — vincula via addEventListener.
+  // Troca de modo é feita via fetch (sem reload) pra não recolher o accordion/aba aberta.
   document.querySelectorAll('.mode-toggle-radio').forEach(function (radio) {
     radio.addEventListener('change', function () {
-      radio.form.submit();
+      var form = radio.form;
+      var container = form.parentElement.parentElement; // form > toggle-wrapper > accordion-body/card-body
+      var isIndividual = radio.value === 'INDIVIDUAL';
+
+      var globalPanel = container.querySelector('.mode-panel-global');
+      var individualPanel = container.querySelector('.mode-panel-individual');
+      if (globalPanel) globalPanel.style.display = isIndividual ? 'none' : '';
+      if (individualPanel) individualPanel.style.display = isIndividual ? '' : 'none';
+
+      var accordionItem = form.closest('.accordion-item');
+      if (accordionItem) {
+        var headerIndividual = accordionItem.querySelector('.header-badge-individual');
+        var headerGlobal = accordionItem.querySelector('.header-badge-global');
+        if (headerIndividual) headerIndividual.style.display = isIndividual ? '' : 'none';
+        if (headerGlobal) headerGlobal.style.display = isIndividual ? 'none' : '';
+      }
+
+      fetch(form.action, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams(new FormData(form)).toString(),
+      }).catch(function (err) {
+        console.error('Falha ao salvar modo de configuração:', err);
+      });
     });
   });
 
